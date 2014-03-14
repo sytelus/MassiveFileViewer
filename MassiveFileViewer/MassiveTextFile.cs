@@ -11,101 +11,132 @@ namespace MassiveFileViewer
     public class MassiveTextFile : IDisposable
     {
         FileStream fileStream;
-        private long sampleLinesSizeSum;
-        private long sampleLinesCount;
-        private long nextPagePosition, previousPagePosition;
 
+        //Calculate average line size
+        private OnlineAverage averageLineSize;
+
+        //Events when page is changed
         public delegate void OnPageRefreshedDelegate(object sender, EventArgs args);
         public event OnPageRefreshedDelegate OnPageRefreshed;
 
-        private double GetAverageLineSize()
-        {
-            var averageLineSize = this.sampleLinesSizeSum / (double)this.sampleLinesCount;
-            if (double.IsNaN(averageLineSize))
-                averageLineSize = 1;
-            return averageLineSize;
-        }
+        //Save page positions so we can go back and forth
+        private IDictionary<long, long> exactPagePositions;
+        private IDictionary<long, long> approximatePagePositions;
+        private HashSet<long> vistedPages;
 
         public long FileSize { get; private set; }
-        const int BufferSize = 2 ^ 17;
-
-        private List<string> lines = new List<string>();
-        public IList<string> Lines
-        {
-            get { return this.lines; }
-        }
+        const int BufferSize = 2 ^ 17;  //How much data to read at a time
 
         public void Load(string filePath)
         {
-            if (this.fileStream != null)
-            {
-                this.fileStream.Dispose();
-                this.fileStream = null;
-            }
+            DisposeFileStream();
+            this.ResetPagePositionsCache();
 
             this.fileStream = File.OpenRead(filePath);
             this.FileSize = this.fileStream.Length;
-            this.previousPagePosition = this.fileStream.Position;
-            this.nextPagePosition = this.fileStream.Position;
 
-            this.RefreshCurrentPage(true);
+            this.CurrentPageIndex = 0;
         }
 
-        public void RefreshCurrentPage(bool updateLineSizeStats = false)
+        private void ResetPagePositionsCache()
         {
-            var originalPosition = this.fileStream.Position;
+            this.exactPagePositions = new Dictionary<long, long>() { { 0, 0 } };
+            this.approximatePagePositions = new Dictionary<long, long>();
+            this.vistedPages = new HashSet<long>();
+            this.averageLineSize = new OnlineAverage();
+        }
+
+        public void RefreshCurrentPage()
+        {
+            var updateLineSizeStats = this.vistedPages.Add(this.CurrentPageIndex);
+
+            this.SeekToPage(this.CurrentPageIndex);
 
             var buffer = new byte[BufferSize];
             lines.Clear();
 
-            if (updateLineSizeStats)
-            {
-                this.sampleLinesCount = 0;
-                this.sampleLinesSizeSum = 0;
-            }
-
-            while(this.fileStream.Position < this.fileStream.Length && lines.Count < this.PageSize)
+            while(!this.EndOfFile && lines.Count < this.PageSize)
             {
                 var lineBytes = this.ReadLine();
                 var line = Encoding.UTF8.GetString(lineBytes.ToArray());
-                lines.Add(line.TrimEnd());
+                lines.Add(line);
 
                 if (updateLineSizeStats)
-                    this.sampleLinesSizeSum += line.Length;
+                    this.averageLineSize.Observe(line.Length);
             }
 
-            if (updateLineSizeStats)
-                this.sampleLinesCount = lines.Count;
-
-            nextPagePosition = this.fileStream.Position;
-            originalPosition = this.SeekToPosition(originalPosition);
+            UpdateNextPagePosition(this.CurrentPageIndex, this.CurrentBytePosition);
 
             if (this.OnPageRefreshed != null)
                 OnPageRefreshed(this, null);
         }
-        
-        private void SeekToPage(long pageIndex)
-        {
-            var byteIndex = (long)(pageIndex * this.PageSize * this.GetAverageLineSize()) - 1;
-            byteIndex = SeekToPosition(byteIndex);
 
-            if (this.fileStream.Position > 0)
-                ReadLine().ToVoid();
+        public bool EndOfFile
+        {
+            get { return this.CurrentBytePosition >= this.fileStream.Length; }
+        }
+        public bool StartOfFile
+        {
+            get { return this.CurrentBytePosition <= 0; }
         }
 
-        private long SeekToPosition(long byteIndex)
+        private void UpdateNextPagePosition(long currentPageIndex, long nextPageFilePosition)
+        {
+            if (this.IsPageApproximate(currentPageIndex))
+                this.approximatePagePositions[currentPageIndex + 1] = nextPageFilePosition;
+            else
+                this.exactPagePositions[currentPageIndex + 1] = nextPageFilePosition;
+        }
+        
+        public bool IsPageApproximate(long pageIndex)
+        {
+            return !this.exactPagePositions.ContainsKey(pageIndex);
+        }
+
+        public bool HasPagePositionCached(long pageIndex)
+        {
+            return this.exactPagePositions.ContainsKey(pageIndex) ||
+                this.approximatePagePositions.ContainsKey(pageIndex);
+        }
+
+        private void SeekToPage(long pageIndex)
+        {
+            bool isApproximateSeek = this.IsPageApproximate(pageIndex);
+            long byteIndex;
+            if (isApproximateSeek)
+            {
+                byteIndex = this.approximatePagePositions.GetValueOrDefault(pageIndex, -1);
+
+                if (byteIndex == -1)
+                    byteIndex = (long)(pageIndex * this.PageSize * this.GetAverageLineSize()) - 1;
+            }
+            else
+                byteIndex = this.exactPagePositions[pageIndex];
+
+            SeekToPosition(byteIndex);
+
+            //Complete current partial line
+            if (!this.HasPagePositionCached(pageIndex))
+                ReadLine().ToVoid();
+
+            if (isApproximateSeek)
+                this.approximatePagePositions[pageIndex] = this.CurrentBytePosition;
+            else
+                this.exactPagePositions[pageIndex] = this.CurrentBytePosition;
+        }
+
+        private void SeekToPosition(long byteIndex)
         {
             byteIndex = Math.Min(byteIndex, this.FileSize - 1);
             byteIndex = Math.Max(byteIndex, 0);
             this.fileStream.Seek(byteIndex, SeekOrigin.Begin);
-            return byteIndex;
         }
 
         private IEnumerable<byte> ReadLine()
         {
             bool lineDelimiterFound = false;
             bool lineStartFound = false;
-            while (this.fileStream.Position < this.fileStream.Length && !lineStartFound)
+            while (!this.EndOfFile && !lineStartFound)
             {
                 var nextByte = this.fileStream.ReadByte();
 
@@ -118,19 +149,37 @@ namespace MassiveFileViewer
                     yield return (byte)nextByte;
             }
 
-            if (lineStartFound && this.fileStream.Position > 0)
+            //Reposition at the start of next line
+            if (lineStartFound && this.CurrentBytePosition > 0)
                 this.fileStream.Seek(-1, SeekOrigin.Current);
         }
+
+        private double GetAverageLineSize()
+        {
+            var averageLineSize = this.averageLineSize.Mean;
+            if (double.IsNaN(averageLineSize) || averageLineSize <= 0)
+                averageLineSize = 80;
+            return averageLineSize;
+        }
+
+        //Lines for current page
+        private List<string> lines = new List<string>();
+        public IList<string> Lines
+        {
+            get { return this.lines; }
+        }
+
 
         private int pageSize = 1000;
         public int PageSize
         {
             get { return this.pageSize; }
             set 
-            { 
+            {
+                this.ResetPagePositionsCache();
+                var pageIndexMultiplier = this.pageSize / (double)value;
                 this.pageSize = value;
-                this.SeekToPage(this.currentPageIndex);
-                this.RefreshCurrentPage();
+                this.CurrentPageIndex = (long) (this.CurrentPageIndex * pageIndexMultiplier);
             }
         }
 
@@ -140,17 +189,12 @@ namespace MassiveFileViewer
             get { return this.currentPageIndex; }
             set 
             {
-                if (value - this.currentPageIndex == 1)
-                {
-                    this.previousPagePosition = this.fileStream.Position;
-                    this.SeekToPosition(this.nextPagePosition);
-                }
-                else if (this.currentPageIndex - value == 1)
-                    this.SeekToPosition(this.previousPagePosition);
-                else
-                    this.SeekToPage(value);
+                if ((value > this.currentPageIndex && this.EndOfFile) ||
+                    (value < this.currentPageIndex && this.StartOfFile) ||
+                    (value < 0))
+                    return;
 
-                this.currentPageIndex = this.CurrentPageEstimate;
+                this.currentPageIndex = value;
                 this.RefreshCurrentPage();
             }
         }
@@ -168,6 +212,21 @@ namespace MassiveFileViewer
                 return (long)(this.FileSize / averageLineSize);
             }
         }
+        private double GetInvStandardDeviation()
+        {
+            var sd = this.averageLineSize.GetStandardDeviation();
+            var avg = this.GetAverageLineSize(); 
+            var invSd = sd / (avg*avg - sd*sd);
+
+            return invSd;
+        }
+        public long TotalLinesStandardDeviation
+        {
+            get
+            {
+                return (long)(this.FileSize * this.GetInvStandardDeviation());
+            }
+        }
         public long CurrentLineEstimate
         {
             get
@@ -182,6 +241,13 @@ namespace MassiveFileViewer
             {
                 var averageLineSize = GetAverageLineSize();
                 return (long)(this.FileSize / (averageLineSize * this.PageSize));
+            }
+        }
+        public long TotalPagesStandardDeviation
+        {
+            get
+            {
+                return (long)(this.FileSize / this.PageSize * this.GetInvStandardDeviation());
             }
         }
         public long CurrentPageEstimate
@@ -201,11 +267,7 @@ namespace MassiveFileViewer
             {
                 if (disposing)
                 {
-                    if (fileStream != null)
-                    {
-                        fileStream.Dispose();
-                        fileStream = null;
-                    }
+                    this.DisposeFileStream();
 
                     if (this.OnPageRefreshed != null)
                         this.OnPageRefreshed = null;
@@ -218,6 +280,15 @@ namespace MassiveFileViewer
         public void Dispose()
         {
             Dispose(true);
+        }
+
+        private void DisposeFileStream()
+        {
+            if (this.fileStream != null)
+            {
+                this.fileStream.Dispose();
+                this.fileStream = null;
+            }
         }
         #endregion
     }

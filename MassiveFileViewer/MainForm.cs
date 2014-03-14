@@ -47,12 +47,15 @@ namespace MassiveFileViewer
         }
         private void massiveTextFile_OnPageRefreshed(object sender, EventArgs args)
         {
-            toolStripStatusLabelCurrentLine.Text = "Current Line: ~" + massiveTextFile.CurrentLineEstimate;
-            toolStripStatusLabelTotalLines.Text = "Total Lines: ~" + massiveTextFile.TotalLinesEstimate;
+            var approximatePrefix = massiveTextFile.IsPageApproximate(massiveTextFile.CurrentPageIndex) ? "~" : string.Empty;
+            toolStripStatusLabelCurrentLine.Text = "Current Line: " + approximatePrefix  + massiveTextFile.CurrentLineEstimate;
+            toolStripStatusLabelTotalLines.Text = string.Concat("Total Lines: ~", massiveTextFile.TotalLinesEstimate.ToString("N0"),
+                "±", ((int)massiveTextFile.TotalLinesStandardDeviation).ToString("N0"));
             toolStripStatusLabelFileSize.Text = "File Size: " + massiveTextFile.FileSize;
             toolStripStatusLabelCurrentPosition.Text = @"Current Byte#: " + massiveTextFile.CurrentBytePosition;
-            toolStripStatusLabelCurrentPage.Text = "Current Page: ~" + massiveTextFile.CurrentPageIndex;
-            toolStripStatusLabelTotalPages.Text = "Total Pages: ~" + massiveTextFile.TotalPagesEstimate;
+            toolStripStatusLabelCurrentPage.Text = "Current Page:  " + approximatePrefix + massiveTextFile.CurrentPageIndex;
+            toolStripStatusLabelTotalPages.Text = string.Concat("Total Pages: ~", massiveTextFile.TotalPagesEstimate.ToString("N0"),
+                "±", ((int)massiveTextFile.TotalPagesStandardDeviation).ToString("N0"));
             textBoxCurrentPageIndex.Text = massiveTextFile.CurrentPageIndex.ToString();
             textBoxPageSize.Text = massiveTextFile.PageSize.ToStringInvariant();
 

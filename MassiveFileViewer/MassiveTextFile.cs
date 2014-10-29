@@ -4,10 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using CommonUtils;
+using System.Threading;
 
 namespace MassiveFileViewer
 {
+    /// <summary>
+    /// Class to load arbitrary large files of records that are delimited and browse through it in terms of pages of records
+    /// </summary>
     public class MassiveTextFile : IDisposable
     {
         FileStream fileStream;
@@ -25,15 +30,18 @@ namespace MassiveFileViewer
         private HashSet<long> vistedPages;
 
         public long FileSize { get; private set; }
-        const int BufferSize = 2 ^ 17;  //How much data to read at a time
+        private int pageSize = 1000;    //Page has 1000 lines
+        const int BufferSize = 1 << 20;  //Buffer size for direct file I/O
+        byte[] buffer;
 
         public void Load(string filePath)
         {
-            DisposeFileStream();
+            DisposeFileStream();    //Recreate file stream on load
             this.ResetPagePositionsCache();
 
             this.fileStream = File.OpenRead(filePath);
             this.FileSize = this.fileStream.Length;
+            this.buffer = new byte[BufferSize];
 
             this.CurrentPageIndex = 0;
         }
@@ -46,29 +54,45 @@ namespace MassiveFileViewer
             this.averageLineSize = new OnlineAverage();
         }
 
+        /// <summary>
+        /// Non-async version of refresh page
+        /// </summary>
         public void RefreshCurrentPage()
         {
-            var updateLineSizeStats = this.vistedPages.Add(this.CurrentPageIndex);
+            Task.Run(() => this.RefreshCurrentPageAsync()).Wait();
 
-            this.SeekToPage(this.CurrentPageIndex);
+            if (this.OnPageRefreshed != null)
+                OnPageRefreshed(this, null);
+        }
 
-            var buffer = new byte[BufferSize];
+        /// <summary>
+        /// Async version of refresh page
+        /// </summary>
+        private async Task RefreshCurrentPageAsync()
+        {
+            //If we haven't seen this page before than we would include in the stats
+            var isUpdateLineSizeStats = this.vistedPages.Add(this.CurrentPageIndex);
+
+            //Go to byte position where line starts
+            await this.SeekToPageAsync(this.CurrentPageIndex);
+
+            //Fill up the lines until we have page full or run out of file
             lines.Clear();
-
             while(!this.EndOfFile && lines.Count < this.PageSize)
             {
-                var lineBytes = this.ReadLine();
-                var line = Encoding.UTF8.GetString(lineBytes.ToArray());
-                lines.Add(line);
+                var line = await this.ReadLineAsync();
+                lines.Add(GetColumns(line));
 
-                if (updateLineSizeStats)
+                if (isUpdateLineSizeStats)
                     this.averageLineSize.Observe(line.Length);
             }
 
             UpdateNextPagePosition(this.CurrentPageIndex, this.CurrentBytePosition);
+        }
 
-            if (this.OnPageRefreshed != null)
-                OnPageRefreshed(this, null);
+        private static string[] GetColumns(string line)
+        {
+            return line.Split(Utils.TabDelimiter);
         }
 
         public bool EndOfFile
@@ -78,6 +102,58 @@ namespace MassiveFileViewer
         public bool StartOfFile
         {
             get { return this.CurrentBytePosition <= 0; }
+        }
+
+
+        public class SearchResult
+        {
+            public string Line { get; set; }
+            public string[] Columns { get; set; }
+            public long LineIndex { get; set; }
+            public bool IsProgressReport { get; set; }
+        }
+        public async Task SearchRecordsAsync(ITargetBlock<SearchResult> filteredRecordsBuffer, IRecordSearch filter, CancellationToken ct)
+        {
+            var allRecordsBuffer = new BufferBlock<SearchResult>();
+            AllRecordsProducerAsync(allRecordsBuffer, ct)
+                .SetFault(allRecordsBuffer)
+                .Forget();
+
+            while(!ct.IsCancellationRequested && await allRecordsBuffer.OutputAvailableAsync())
+            {
+                SearchResult record;
+                while (!ct.IsCancellationRequested && allRecordsBuffer.TryReceive(out record))
+                {
+                    var columns = GetColumns(record.Line);
+                    if (filter.IsPasses(columns))
+                    {
+                        record.Columns = columns;
+                        await filteredRecordsBuffer.SendAsync(record);
+                    }
+                    else
+                    {
+                        if (record.LineIndex % this.PageSize == 0)
+                        {
+                            record.IsProgressReport = true;
+                            await filteredRecordsBuffer.SendAsync(record);
+                        }
+                    }
+                }
+            }
+
+            filteredRecordsBuffer.Complete();
+        }
+
+        private async Task AllRecordsProducerAsync(ITargetBlock<SearchResult> allRecordsBuffer, CancellationToken ct)
+        {
+            var recordCount = 0;
+            while (!ct.IsCancellationRequested && !this.EndOfFile)
+            {
+                var record = await this.ReadLineAsync();
+                await allRecordsBuffer.SendAsync(new SearchResult() {Line = record, LineIndex = recordCount++});
+            }
+
+            allRecordsBuffer.Complete();
         }
 
         private void UpdateNextPagePosition(long currentPageIndex, long nextPageFilePosition)
@@ -99,7 +175,7 @@ namespace MassiveFileViewer
                 this.approximatePagePositions.ContainsKey(pageIndex);
         }
 
-        private void SeekToPage(long pageIndex)
+        private async Task SeekToPageAsync(long pageIndex)
         {
             bool isApproximateSeek = this.IsPageApproximate(pageIndex);
             long byteIndex;
@@ -117,7 +193,7 @@ namespace MassiveFileViewer
 
             //Complete current partial line
             if (!this.HasPagePositionCached(pageIndex))
-                ReadLine().ToVoid();
+                await ReadLineAsync();
 
             if (isApproximateSeek)
                 this.approximatePagePositions[pageIndex] = this.CurrentBytePosition;
@@ -132,26 +208,37 @@ namespace MassiveFileViewer
             this.fileStream.Seek(byteIndex, SeekOrigin.Begin);
         }
 
-        private IEnumerable<byte> ReadLine()
+        /// <summary>
+        /// This method will start reading the line until LR/CF are found. After LR/CF are found it will continue
+        /// reading until non-LR-CF chars are found
+        /// </summary>
+        private async Task<string> ReadLineAsync()
         {
+            var lineBytes = new List<byte>();
             bool lineDelimiterFound = false;
             bool lineStartFound = false;
             while (!this.EndOfFile && !lineStartFound)
             {
-                var nextByte = this.fileStream.ReadByte();
+                var bytesRead = await this.fileStream.ReadAsync(this.buffer, 0, this.buffer.Length);
+                for (var i = 0; i < bytesRead; i++)
+                {
+                    var nextByte = this.buffer[i];
+                    if (!lineDelimiterFound)
+                        lineDelimiterFound = nextByte == 10 || nextByte == 13;
+                    else
+                        lineStartFound = nextByte != 10 && nextByte != 13;
 
-                if (!lineDelimiterFound)
-                    lineDelimiterFound = nextByte == 10 || nextByte == 13;
-                else
-                    lineStartFound = nextByte != 10 && nextByte != 13;
-
-                if (!lineStartFound)
-                    yield return (byte)nextByte;
+                    if (!lineStartFound)
+                        lineBytes.Add(nextByte);
+                    else //we have crossed the delimiter and found the start of the first line, so reposition next seek here
+                    {
+                        this.fileStream.Seek(i - bytesRead, SeekOrigin.Current);
+                        break;
+                    }
+                }
             }
 
-            //Reposition at the start of next line
-            if (lineStartFound && this.CurrentBytePosition > 0)
-                this.fileStream.Seek(-1, SeekOrigin.Current);
+            return Encoding.UTF8.GetString(lineBytes.ToArray());
         }
 
         private double GetAverageLineSize()
@@ -163,14 +250,13 @@ namespace MassiveFileViewer
         }
 
         //Lines for current page
-        private List<string> lines = new List<string>();
-        public IList<string> Lines
+        private List<string[]> lines = new List<string[]>();
+        public IList<string[]> Lines
         {
             get { return this.lines; }
         }
 
 
-        private int pageSize = 1000;
         public int PageSize
         {
             get { return this.pageSize; }

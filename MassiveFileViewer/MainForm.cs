@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CommonUtils;
 using CommonWinFormUtils;
+using System.Threading.Tasks.Dataflow;
+using System.Threading;
 
 namespace MassiveFileViewer
 {
@@ -59,19 +61,35 @@ namespace MassiveFileViewer
             textBoxCurrentPageIndex.Text = massiveTextFile.CurrentPageIndex.ToString();
             textBoxPageSize.Text = massiveTextFile.PageSize.ToStringInvariant();
 
-            if (massiveTextFile.Lines.Count > 0)
+            this.DisplayLines(massiveTextFile.Lines);
+        }
+
+
+        private void ClearGrid()
+        {
+            dataGridViewMain.ColumnCount = 0;
+            dataGridViewMain.Rows.Clear();
+        }
+
+        private void AddLineInGrid(string[] line, long rowIndex)
+        {
+            if (dataGridViewMain.ColumnCount == 0)
             {
-                DataTable table = new DataTable();
-                for (int i = 0; i < massiveTextFile.Lines[0].Split(Utils.TabDelimiter).Length; i++)
-                    table.Columns.Add(i.ToString(), typeof(string));
-
-                foreach (var line in massiveTextFile.Lines)
-                    table.LoadDataRow(line.Split(Utils.TabDelimiter), true);
-
-                dataGridViewMain.DataSource = table.DefaultView;
+                dataGridViewMain.ColumnCount = line.Length;
+                for (var columnIndex = 0; columnIndex < line.Length; columnIndex++)
+                    dataGridViewMain.Columns[columnIndex].Name = columnIndex.ToStringCurrentCulture();
             }
-            else
-                this.dataGridViewMain.DataSource = null;
+
+            var index = dataGridViewMain.Rows.Add(line);
+            dataGridViewMain.Rows[index].HeaderCell.Value = rowIndex.ToString();
+        }
+
+        private void DisplayLines(IEnumerable<string[]> lines)
+        {
+            this.ClearGrid();
+            var lineCount = 0;
+            foreach (var line in lines)
+                this.AddLineInGrid(line, lineCount++);
         }
 
         private void buttonNext_Click(object sender, EventArgs e)
@@ -92,6 +110,54 @@ namespace MassiveFileViewer
         private void buttonChangePageSize_Click(object sender, EventArgs e)
         {
             massiveTextFile.PageSize = int.Parse(textBoxPageSize.Text);
+        }
+
+        //Task currentSearchTask = null;
+        CancellationTokenSource cts = new CancellationTokenSource();
+        long? pageIndexBeforeSearch = null;
+
+        private async void buttonSearch_Click(object sender, EventArgs e)
+        {
+            this.pageIndexBeforeSearch = this.pageIndexBeforeSearch ?? massiveTextFile.CurrentPageIndex;
+            this.progressBarSearch.Maximum = (int)massiveTextFile.TotalLinesEstimate;   //TODO: handle long balues properly
+            this.progressBarSearch.Minimum = 0;
+            this.ClearGrid();
+
+            var progress = new Progress<MassiveTextFile.SearchResult>((record) =>
+                {
+                    if (!record.IsProgressReport)
+                    {
+                        this.AddLineInGrid(record.Columns, record.LineIndex);
+                    }
+                    this.progressBarSearch.Value = (int)record.LineIndex; //TODO: handle long balues properly
+                    this.labelSearchProgress.Text = record.LineIndex.ToString();
+                });
+
+            await Task.Factory.StartNew(() => SearchAsync(textBoxQuery.Text, progress), TaskCreationOptions.LongRunning);
+        }
+
+        private async Task SearchAsync(string query, IProgress<MassiveTextFile.SearchResult> progress)
+        {
+            var filteredLinesBuffer = new BufferBlock<MassiveTextFile.SearchResult>();
+            var task = massiveTextFile.SearchRecordsAsync(filteredLinesBuffer, new ColumnRecordSearch(query), cts.Token);
+
+            var recordCount = 0;
+            while (await filteredLinesBuffer.OutputAvailableAsync())
+            {
+                MassiveTextFile.SearchResult record;
+                while (filteredLinesBuffer.TryReceive(out record))
+                {
+                    progress.Report(record);
+
+                    if (!record.IsProgressReport)
+                    {
+                        recordCount++;
+
+                        if (recordCount >= 50)
+                            cts.Cancel();
+                    }
+                }
+            }
         }
     }
 }

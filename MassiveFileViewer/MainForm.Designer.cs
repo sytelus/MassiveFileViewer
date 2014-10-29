@@ -30,28 +30,33 @@
         {
             this.panel1 = new System.Windows.Forms.Panel();
             this.panel4 = new System.Windows.Forms.Panel();
+            this.buttonChangePageSize = new System.Windows.Forms.Button();
+            this.textBoxPageSize = new System.Windows.Forms.TextBox();
+            this.buttonGotoPage = new System.Windows.Forms.Button();
+            this.textBoxCurrentPageIndex = new System.Windows.Forms.TextBox();
+            this.buttonNext = new System.Windows.Forms.Button();
+            this.buttonPrevious = new System.Windows.Forms.Button();
             this.dataGridViewMain = new System.Windows.Forms.DataGridView();
             this.panel2 = new System.Windows.Forms.Panel();
+            this.buttonSearch = new System.Windows.Forms.Button();
+            this.textBoxQuery = new System.Windows.Forms.TextBox();
             this.panel3 = new System.Windows.Forms.Panel();
             this.buttonLoadFile = new System.Windows.Forms.Button();
             this.textBoxFilePath = new System.Windows.Forms.TextBox();
             this.label1 = new System.Windows.Forms.Label();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
-            this.buttonPrevious = new System.Windows.Forms.Button();
-            this.buttonNext = new System.Windows.Forms.Button();
             this.toolStripStatusLabelCurrentPage = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelTotalPages = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelCurrentLine = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelTotalLines = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelCurrentPosition = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelFileSize = new System.Windows.Forms.ToolStripStatusLabel();
-            this.textBoxCurrentPageIndex = new System.Windows.Forms.TextBox();
-            this.buttonGotoPage = new System.Windows.Forms.Button();
-            this.buttonChangePageSize = new System.Windows.Forms.Button();
-            this.textBoxPageSize = new System.Windows.Forms.TextBox();
+            this.progressBarSearch = new System.Windows.Forms.ProgressBar();
+            this.labelSearchProgress = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
             this.panel4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).BeginInit();
+            this.panel2.SuspendLayout();
             this.panel3.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -80,6 +85,60 @@
             this.panel4.Size = new System.Drawing.Size(830, 53);
             this.panel4.TabIndex = 1;
             // 
+            // buttonChangePageSize
+            // 
+            this.buttonChangePageSize.Location = new System.Drawing.Point(87, 4);
+            this.buttonChangePageSize.Name = "buttonChangePageSize";
+            this.buttonChangePageSize.Size = new System.Drawing.Size(120, 23);
+            this.buttonChangePageSize.TabIndex = 5;
+            this.buttonChangePageSize.Text = "Change Page Size";
+            this.buttonChangePageSize.UseVisualStyleBackColor = true;
+            this.buttonChangePageSize.Click += new System.EventHandler(this.buttonChangePageSize_Click);
+            // 
+            // textBoxPageSize
+            // 
+            this.textBoxPageSize.Location = new System.Drawing.Point(4, 6);
+            this.textBoxPageSize.Name = "textBoxPageSize";
+            this.textBoxPageSize.Size = new System.Drawing.Size(77, 20);
+            this.textBoxPageSize.TabIndex = 4;
+            // 
+            // buttonGotoPage
+            // 
+            this.buttonGotoPage.Location = new System.Drawing.Point(541, 4);
+            this.buttonGotoPage.Name = "buttonGotoPage";
+            this.buttonGotoPage.Size = new System.Drawing.Size(75, 23);
+            this.buttonGotoPage.TabIndex = 3;
+            this.buttonGotoPage.Text = "Goto Page";
+            this.buttonGotoPage.UseVisualStyleBackColor = true;
+            this.buttonGotoPage.Click += new System.EventHandler(this.buttonGotoPage_Click);
+            // 
+            // textBoxCurrentPageIndex
+            // 
+            this.textBoxCurrentPageIndex.Location = new System.Drawing.Point(458, 6);
+            this.textBoxCurrentPageIndex.Name = "textBoxCurrentPageIndex";
+            this.textBoxCurrentPageIndex.Size = new System.Drawing.Size(77, 20);
+            this.textBoxCurrentPageIndex.TabIndex = 2;
+            // 
+            // buttonNext
+            // 
+            this.buttonNext.Location = new System.Drawing.Point(749, 3);
+            this.buttonNext.Name = "buttonNext";
+            this.buttonNext.Size = new System.Drawing.Size(75, 23);
+            this.buttonNext.TabIndex = 1;
+            this.buttonNext.Text = "Next >>";
+            this.buttonNext.UseVisualStyleBackColor = true;
+            this.buttonNext.Click += new System.EventHandler(this.buttonNext_Click);
+            // 
+            // buttonPrevious
+            // 
+            this.buttonPrevious.Location = new System.Drawing.Point(668, 3);
+            this.buttonPrevious.Name = "buttonPrevious";
+            this.buttonPrevious.Size = new System.Drawing.Size(75, 23);
+            this.buttonPrevious.TabIndex = 0;
+            this.buttonPrevious.Text = "<< Previous";
+            this.buttonPrevious.UseVisualStyleBackColor = true;
+            this.buttonPrevious.Click += new System.EventHandler(this.buttonPrevious_Click);
+            // 
             // dataGridViewMain
             // 
             this.dataGridViewMain.AllowUserToAddRows = false;
@@ -97,11 +156,32 @@
             // 
             // panel2
             // 
+            this.panel2.Controls.Add(this.labelSearchProgress);
+            this.panel2.Controls.Add(this.progressBarSearch);
+            this.panel2.Controls.Add(this.buttonSearch);
+            this.panel2.Controls.Add(this.textBoxQuery);
             this.panel2.Dock = System.Windows.Forms.DockStyle.Right;
             this.panel2.Location = new System.Drawing.Point(830, 0);
             this.panel2.Name = "panel2";
             this.panel2.Size = new System.Drawing.Size(200, 687);
             this.panel2.TabIndex = 1;
+            // 
+            // buttonSearch
+            // 
+            this.buttonSearch.Location = new System.Drawing.Point(109, 65);
+            this.buttonSearch.Name = "buttonSearch";
+            this.buttonSearch.Size = new System.Drawing.Size(75, 23);
+            this.buttonSearch.TabIndex = 1;
+            this.buttonSearch.Text = "Search";
+            this.buttonSearch.UseVisualStyleBackColor = true;
+            this.buttonSearch.Click += new System.EventHandler(this.buttonSearch_Click);
+            // 
+            // textBoxQuery
+            // 
+            this.textBoxQuery.Location = new System.Drawing.Point(14, 39);
+            this.textBoxQuery.Name = "textBoxQuery";
+            this.textBoxQuery.Size = new System.Drawing.Size(170, 20);
+            this.textBoxQuery.TabIndex = 0;
             // 
             // panel3
             // 
@@ -156,26 +236,6 @@
             this.statusStrip1.TabIndex = 3;
             this.statusStrip1.Text = "statusStrip1";
             // 
-            // buttonPrevious
-            // 
-            this.buttonPrevious.Location = new System.Drawing.Point(668, 3);
-            this.buttonPrevious.Name = "buttonPrevious";
-            this.buttonPrevious.Size = new System.Drawing.Size(75, 23);
-            this.buttonPrevious.TabIndex = 0;
-            this.buttonPrevious.Text = "<< Previous";
-            this.buttonPrevious.UseVisualStyleBackColor = true;
-            this.buttonPrevious.Click += new System.EventHandler(this.buttonPrevious_Click);
-            // 
-            // buttonNext
-            // 
-            this.buttonNext.Location = new System.Drawing.Point(749, 3);
-            this.buttonNext.Name = "buttonNext";
-            this.buttonNext.Size = new System.Drawing.Size(75, 23);
-            this.buttonNext.TabIndex = 1;
-            this.buttonNext.Text = "Next >>";
-            this.buttonNext.UseVisualStyleBackColor = true;
-            this.buttonNext.Click += new System.EventHandler(this.buttonNext_Click);
-            // 
             // toolStripStatusLabelCurrentPage
             // 
             this.toolStripStatusLabelCurrentPage.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
@@ -217,39 +277,22 @@
             this.toolStripStatusLabelFileSize.Size = new System.Drawing.Size(45, 17);
             this.toolStripStatusLabelFileSize.Text = "FileSize";
             // 
-            // textBoxCurrentPageIndex
+            // progressBarSearch
             // 
-            this.textBoxCurrentPageIndex.Location = new System.Drawing.Point(458, 6);
-            this.textBoxCurrentPageIndex.Name = "textBoxCurrentPageIndex";
-            this.textBoxCurrentPageIndex.Size = new System.Drawing.Size(77, 20);
-            this.textBoxCurrentPageIndex.TabIndex = 2;
+            this.progressBarSearch.Location = new System.Drawing.Point(16, 99);
+            this.progressBarSearch.Name = "progressBarSearch";
+            this.progressBarSearch.Size = new System.Drawing.Size(167, 15);
+            this.progressBarSearch.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
+            this.progressBarSearch.TabIndex = 2;
             // 
-            // buttonGotoPage
+            // labelSearchProgress
             // 
-            this.buttonGotoPage.Location = new System.Drawing.Point(541, 4);
-            this.buttonGotoPage.Name = "buttonGotoPage";
-            this.buttonGotoPage.Size = new System.Drawing.Size(75, 23);
-            this.buttonGotoPage.TabIndex = 3;
-            this.buttonGotoPage.Text = "Goto Page";
-            this.buttonGotoPage.UseVisualStyleBackColor = true;
-            this.buttonGotoPage.Click += new System.EventHandler(this.buttonGotoPage_Click);
-            // 
-            // buttonChangePageSize
-            // 
-            this.buttonChangePageSize.Location = new System.Drawing.Point(87, 4);
-            this.buttonChangePageSize.Name = "buttonChangePageSize";
-            this.buttonChangePageSize.Size = new System.Drawing.Size(120, 23);
-            this.buttonChangePageSize.TabIndex = 5;
-            this.buttonChangePageSize.Text = "Change Page Size";
-            this.buttonChangePageSize.UseVisualStyleBackColor = true;
-            this.buttonChangePageSize.Click += new System.EventHandler(this.buttonChangePageSize_Click);
-            // 
-            // textBoxPageSize
-            // 
-            this.textBoxPageSize.Location = new System.Drawing.Point(4, 6);
-            this.textBoxPageSize.Name = "textBoxPageSize";
-            this.textBoxPageSize.Size = new System.Drawing.Size(77, 20);
-            this.textBoxPageSize.TabIndex = 4;
+            this.labelSearchProgress.AutoSize = true;
+            this.labelSearchProgress.Location = new System.Drawing.Point(149, 117);
+            this.labelSearchProgress.Name = "labelSearchProgress";
+            this.labelSearchProgress.Size = new System.Drawing.Size(0, 13);
+            this.labelSearchProgress.TabIndex = 3;
+            this.labelSearchProgress.TextAlign = System.Drawing.ContentAlignment.TopRight;
             // 
             // MainForm
             // 
@@ -268,6 +311,8 @@
             this.panel4.ResumeLayout(false);
             this.panel4.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).EndInit();
+            this.panel2.ResumeLayout(false);
+            this.panel2.PerformLayout();
             this.panel3.ResumeLayout(false);
             this.panel3.PerformLayout();
             this.statusStrip1.ResumeLayout(false);
@@ -300,6 +345,10 @@
         private System.Windows.Forms.Button buttonGotoPage;
         private System.Windows.Forms.Button buttonChangePageSize;
         private System.Windows.Forms.TextBox textBoxPageSize;
+        private System.Windows.Forms.Button buttonSearch;
+        private System.Windows.Forms.TextBox textBoxQuery;
+        private System.Windows.Forms.ProgressBar progressBarSearch;
+        private System.Windows.Forms.Label labelSearchProgress;
     }
 }
 

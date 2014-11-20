@@ -38,6 +38,8 @@
             this.buttonPrevious = new System.Windows.Forms.Button();
             this.dataGridViewMain = new System.Windows.Forms.DataGridView();
             this.panel2 = new System.Windows.Forms.Panel();
+            this.labelSearchProgress = new System.Windows.Forms.Label();
+            this.progressBarSearch = new System.Windows.Forms.ProgressBar();
             this.buttonSearch = new System.Windows.Forms.Button();
             this.textBoxQuery = new System.Windows.Forms.TextBox();
             this.panel3 = new System.Windows.Forms.Panel();
@@ -47,12 +49,10 @@
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.toolStripStatusLabelCurrentPage = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelTotalPages = new System.Windows.Forms.ToolStripStatusLabel();
-            this.toolStripStatusLabelCurrentLine = new System.Windows.Forms.ToolStripStatusLabel();
-            this.toolStripStatusLabelTotalLines = new System.Windows.Forms.ToolStripStatusLabel();
+            this.toolStripStatusLabelCurrentRecord = new System.Windows.Forms.ToolStripStatusLabel();
+            this.toolStripStatusLabelTotalRecords = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelCurrentPosition = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelFileSize = new System.Windows.Forms.ToolStripStatusLabel();
-            this.progressBarSearch = new System.Windows.Forms.ProgressBar();
-            this.labelSearchProgress = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
             this.panel4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).BeginInit();
@@ -63,8 +63,8 @@
             // 
             // panel1
             // 
-            this.panel1.Controls.Add(this.panel4);
             this.panel1.Controls.Add(this.dataGridViewMain);
+            this.panel1.Controls.Add(this.panel4);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panel1.Location = new System.Drawing.Point(0, 37);
             this.panel1.Name = "panel1";
@@ -151,7 +151,7 @@
             this.dataGridViewMain.Location = new System.Drawing.Point(0, 0);
             this.dataGridViewMain.Name = "dataGridViewMain";
             this.dataGridViewMain.ReadOnly = true;
-            this.dataGridViewMain.Size = new System.Drawing.Size(830, 628);
+            this.dataGridViewMain.Size = new System.Drawing.Size(830, 575);
             this.dataGridViewMain.TabIndex = 0;
             // 
             // panel2
@@ -165,6 +165,23 @@
             this.panel2.Name = "panel2";
             this.panel2.Size = new System.Drawing.Size(200, 687);
             this.panel2.TabIndex = 1;
+            // 
+            // labelSearchProgress
+            // 
+            this.labelSearchProgress.AutoSize = true;
+            this.labelSearchProgress.Location = new System.Drawing.Point(149, 117);
+            this.labelSearchProgress.Name = "labelSearchProgress";
+            this.labelSearchProgress.Size = new System.Drawing.Size(0, 13);
+            this.labelSearchProgress.TabIndex = 3;
+            this.labelSearchProgress.TextAlign = System.Drawing.ContentAlignment.TopRight;
+            // 
+            // progressBarSearch
+            // 
+            this.progressBarSearch.Location = new System.Drawing.Point(16, 99);
+            this.progressBarSearch.Name = "progressBarSearch";
+            this.progressBarSearch.Size = new System.Drawing.Size(167, 15);
+            this.progressBarSearch.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
+            this.progressBarSearch.TabIndex = 2;
             // 
             // buttonSearch
             // 
@@ -226,8 +243,8 @@
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.toolStripStatusLabelCurrentPage,
             this.toolStripStatusLabelTotalPages,
-            this.toolStripStatusLabelCurrentLine,
-            this.toolStripStatusLabelTotalLines,
+            this.toolStripStatusLabelCurrentRecord,
+            this.toolStripStatusLabelTotalRecords,
             this.toolStripStatusLabelCurrentPosition,
             this.toolStripStatusLabelFileSize});
             this.statusStrip1.Location = new System.Drawing.Point(0, 665);
@@ -250,18 +267,18 @@
             this.toolStripStatusLabelTotalPages.Size = new System.Drawing.Size(65, 17);
             this.toolStripStatusLabelTotalPages.Text = "TotalPages";
             // 
-            // toolStripStatusLabelCurrentLine
+            // toolStripStatusLabelCurrentRecord
             // 
-            this.toolStripStatusLabelCurrentLine.Name = "toolStripStatusLabelCurrentLine";
-            this.toolStripStatusLabelCurrentLine.Size = new System.Drawing.Size(69, 17);
-            this.toolStripStatusLabelCurrentLine.Text = "CurrentLine";
+            this.toolStripStatusLabelCurrentRecord.Name = "toolStripStatusLabelCurrentRecord";
+            this.toolStripStatusLabelCurrentRecord.Size = new System.Drawing.Size(84, 17);
+            this.toolStripStatusLabelCurrentRecord.Text = "CurrentRecord";
             // 
-            // toolStripStatusLabelTotalLines
+            // toolStripStatusLabelTotalRecords
             // 
-            this.toolStripStatusLabelTotalLines.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.toolStripStatusLabelTotalLines.Name = "toolStripStatusLabelTotalLines";
-            this.toolStripStatusLabelTotalLines.Size = new System.Drawing.Size(61, 17);
-            this.toolStripStatusLabelTotalLines.Text = "TotalLines";
+            this.toolStripStatusLabelTotalRecords.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.toolStripStatusLabelTotalRecords.Name = "toolStripStatusLabelTotalRecords";
+            this.toolStripStatusLabelTotalRecords.Size = new System.Drawing.Size(76, 17);
+            this.toolStripStatusLabelTotalRecords.Text = "TotalRecords";
             // 
             // toolStripStatusLabelCurrentPosition
             // 
@@ -276,23 +293,6 @@
             this.toolStripStatusLabelFileSize.Name = "toolStripStatusLabelFileSize";
             this.toolStripStatusLabelFileSize.Size = new System.Drawing.Size(45, 17);
             this.toolStripStatusLabelFileSize.Text = "FileSize";
-            // 
-            // progressBarSearch
-            // 
-            this.progressBarSearch.Location = new System.Drawing.Point(16, 99);
-            this.progressBarSearch.Name = "progressBarSearch";
-            this.progressBarSearch.Size = new System.Drawing.Size(167, 15);
-            this.progressBarSearch.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
-            this.progressBarSearch.TabIndex = 2;
-            // 
-            // labelSearchProgress
-            // 
-            this.labelSearchProgress.AutoSize = true;
-            this.labelSearchProgress.Location = new System.Drawing.Point(149, 117);
-            this.labelSearchProgress.Name = "labelSearchProgress";
-            this.labelSearchProgress.Size = new System.Drawing.Size(0, 13);
-            this.labelSearchProgress.TabIndex = 3;
-            this.labelSearchProgress.TextAlign = System.Drawing.ContentAlignment.TopRight;
             // 
             // MainForm
             // 
@@ -337,8 +337,8 @@
         private System.Windows.Forms.Button buttonPrevious;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelCurrentPage;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelTotalPages;
-        private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelCurrentLine;
-        private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelTotalLines;
+        private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelCurrentRecord;
+        private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelTotalRecords;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelCurrentPosition;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabelFileSize;
         private System.Windows.Forms.TextBox textBoxCurrentPageIndex;

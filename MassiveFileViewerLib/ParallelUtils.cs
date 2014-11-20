@@ -5,9 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-namespace MassiveFileViewer
+namespace MassiveFileViewerLib
 {
-    public static class DataflowUtils
+    public static class ParallelUtils
     {
         public static Task SetFault(this Task task, IDataflowBlock block)
         {

@@ -7,10 +7,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Windows.Forms.VisualStyles;
 using CommonUtils;
 using CommonWinFormUtils;
 using System.Threading.Tasks.Dataflow;
 using System.Threading;
+using MassiveFileViewerLib;
 
 namespace MassiveFileViewer
 {
@@ -21,7 +23,12 @@ namespace MassiveFileViewer
             InitializeComponent();
         }
 
-        MassiveTextFile massiveTextFile = null;
+        MassiveFile massiveFile = null;
+        long currentPageIndex = -1;
+        //Task currentSearchTask = null;
+        readonly CancellationTokenSource cts = new CancellationTokenSource();
+        long pageIndexBeforeSearch;
+
         private void MainForm_Load(object sender, EventArgs e)
         {
             buttonLoadFile_Click(null, null);
@@ -29,41 +36,49 @@ namespace MassiveFileViewer
 
         private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
         {
-            if (massiveTextFile != null)
-                massiveTextFile.Dispose();
+            if (massiveFile != null)
+                massiveFile.Dispose();
         }
 
-        private void buttonLoadFile_Click(object sender, EventArgs e)
+        private async void buttonLoadFile_Click(object sender, EventArgs e)
         {
-            if (massiveTextFile != null)
-                massiveTextFile.Dispose();
+            if (massiveFile != null)
+                massiveFile.Dispose();
 
-            massiveTextFile = new MassiveTextFile();
-            massiveTextFile.OnPageRefreshed += massiveTextFile_OnPageRefreshed;
-            massiveTextFile.Load(textBoxFilePath.Text);
+            massiveFile = new MassiveFile(textBoxFilePath.Text);
+            this.currentPageIndex = -1;
+            await this.GoToPageAsync(0);
         }
 
-        public class LineItem
+        private async Task GoToPageAsync(long pageIndex)
         {
-            public string Line { get; set; }
+            this.currentPageIndex = pageIndex;
+
+            var approximatePrefix = massiveFile.IsPageApproximate(this.currentPageIndex) ? "~" : string.Empty;
+            toolStripStatusLabelCurrentRecord.Text = "Current Record: " + approximatePrefix  + massiveFile.CurrentRecordEstimate;
+            toolStripStatusLabelTotalRecords.Text = string.Concat("Total Records: ~", massiveFile.TotalRecordsEstimate.ToString("N0"),
+                "±", ((int)massiveFile.TotalRecordsStandardDeviation).ToString("N0"));
+            toolStripStatusLabelFileSize.Text = @"File Size: " + massiveFile.FileSize;
+            toolStripStatusLabelCurrentPosition.Text = @"Current Byte#: " + massiveFile.CurrentBytePosition;
+            toolStripStatusLabelCurrentPage.Text = @"Current Page:  " + approximatePrefix + this.currentPageIndex;
+            toolStripStatusLabelTotalPages.Text = string.Concat("Total Pages: ~", massiveFile.TotalPagesEstimate.ToString("N0"),
+                "±", ((int)massiveFile.TotalPagesStandardDeviation).ToString("N0"));
+            textBoxCurrentPageIndex.Text = this.currentPageIndex.ToString("N0");
+            textBoxPageSize.Text = massiveFile.PageSize.ToStringInvariant();
+
+            this.ClearGrid();
+
+            var progress = PrepareUIUpdate(massiveFile.PageSize);
+
+            await DisplayRecordsAsync(this.massiveFile, this.currentPageIndex, progress, cts.Token);
         }
-        private void massiveTextFile_OnPageRefreshed(object sender, EventArgs args)
+
+        private static async Task DisplayRecordsAsync(MassiveFile massiveFile, long pageIndex, IProgress<Record> progress, CancellationToken ct)
         {
-            var approximatePrefix = massiveTextFile.IsPageApproximate(massiveTextFile.CurrentPageIndex) ? "~" : string.Empty;
-            toolStripStatusLabelCurrentLine.Text = "Current Line: " + approximatePrefix  + massiveTextFile.CurrentLineEstimate;
-            toolStripStatusLabelTotalLines.Text = string.Concat("Total Lines: ~", massiveTextFile.TotalLinesEstimate.ToString("N0"),
-                "±", ((int)massiveTextFile.TotalLinesStandardDeviation).ToString("N0"));
-            toolStripStatusLabelFileSize.Text = "File Size: " + massiveTextFile.FileSize;
-            toolStripStatusLabelCurrentPosition.Text = @"Current Byte#: " + massiveTextFile.CurrentBytePosition;
-            toolStripStatusLabelCurrentPage.Text = "Current Page:  " + approximatePrefix + massiveTextFile.CurrentPageIndex;
-            toolStripStatusLabelTotalPages.Text = string.Concat("Total Pages: ~", massiveTextFile.TotalPagesEstimate.ToString("N0"),
-                "±", ((int)massiveTextFile.TotalPagesStandardDeviation).ToString("N0"));
-            textBoxCurrentPageIndex.Text = massiveTextFile.CurrentPageIndex.ToString();
-            textBoxPageSize.Text = massiveTextFile.PageSize.ToStringInvariant();
-
-            this.DisplayLines(massiveTextFile.Lines);
+            var recordsBuffer = new BufferBlock<Record>();
+            var recordsTask = massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct);
+            await DisplayTaskResults(progress, ct, recordsBuffer, recordsTask);
         }
-
 
         private void ClearGrid()
         {
@@ -71,93 +86,91 @@ namespace MassiveFileViewer
             dataGridViewMain.Rows.Clear();
         }
 
-        private void AddLineInGrid(string[] line, long rowIndex)
+        private void AddRecordInGrid(Record record, long rowIndex)
         {
+            var columns = record.Text.Split(Utils.TabDelimiter);
             if (dataGridViewMain.ColumnCount == 0)
             {
-                dataGridViewMain.ColumnCount = line.Length;
-                for (var columnIndex = 0; columnIndex < line.Length; columnIndex++)
+                dataGridViewMain.ColumnCount = columns.Length;
+                for (var columnIndex = 0; columnIndex < columns.Length; columnIndex++)
                     dataGridViewMain.Columns[columnIndex].Name = columnIndex.ToStringCurrentCulture();
             }
 
-            var index = dataGridViewMain.Rows.Add(line);
+            var index = dataGridViewMain.Rows.Add(columns);
             dataGridViewMain.Rows[index].HeaderCell.Value = rowIndex.ToString();
         }
 
-        private void DisplayLines(IEnumerable<string[]> lines)
+        private async void buttonNext_Click(object sender, EventArgs e)
         {
+            if (!this.massiveFile.EndOfFile)
+                await this.GoToPageAsync(this.currentPageIndex + 1);
+        }
+
+        private async void buttonPrevious_Click(object sender, EventArgs e)
+        {
+            if (this.currentPageIndex > 0)
+                await this.GoToPageAsync(this.currentPageIndex - 1);
+        }
+
+        private async void buttonGotoPage_Click(object sender, EventArgs e)
+        {
+            await this.GoToPageAsync(int.Parse(textBoxCurrentPageIndex.Text));
+        }
+
+        private async void buttonChangePageSize_Click(object sender, EventArgs e)
+        {
+            var changeFactor = massiveFile.ResetPageSize(int.Parse(textBoxPageSize.Text), cts.Token);
+            await this.GoToPageAsync((long)(this.currentPageIndex * changeFactor));
+        }
+
+        private Progress<Record> PrepareUIUpdate(long maxrecordsExpected)
+        {
+            this.progressBarSearch.Maximum = (int)maxrecordsExpected;   //TODO: handle long balues properly
+            this.progressBarSearch.Minimum = 0;
             this.ClearGrid();
-            var lineCount = 0;
-            foreach (var line in lines)
-                this.AddLineInGrid(line, lineCount++);
-        }
+            long recordCount = 0;
 
-        private void buttonNext_Click(object sender, EventArgs e)
-        {
-            massiveTextFile.CurrentPageIndex++;
-        }
+            var progress = new Progress<Record>((record) =>
+            {
+                if (!record.IsProgressReport)
+                {
+                    this.AddRecordInGrid(record, record.RecordIndex);
+                }
+                this.progressBarSearch.Value = (int)++recordCount;
+                this.labelSearchProgress.Text = record.RecordIndex.ToString("N0");
+            });
 
-        private void buttonPrevious_Click(object sender, EventArgs e)
-        {
-            massiveTextFile.CurrentPageIndex--;
+            return progress;
         }
-
-        private void buttonGotoPage_Click(object sender, EventArgs e)
-        {
-            massiveTextFile.CurrentPageIndex = int.Parse(textBoxCurrentPageIndex.Text);
-        }
-
-        private void buttonChangePageSize_Click(object sender, EventArgs e)
-        {
-            massiveTextFile.PageSize = int.Parse(textBoxPageSize.Text);
-        }
-
-        //Task currentSearchTask = null;
-        CancellationTokenSource cts = new CancellationTokenSource();
-        long? pageIndexBeforeSearch = null;
 
         private async void buttonSearch_Click(object sender, EventArgs e)
         {
-            this.pageIndexBeforeSearch = this.pageIndexBeforeSearch ?? massiveTextFile.CurrentPageIndex;
-            this.progressBarSearch.Maximum = (int)massiveTextFile.TotalLinesEstimate;   //TODO: handle long balues properly
-            this.progressBarSearch.Minimum = 0;
-            this.ClearGrid();
+            this.pageIndexBeforeSearch = this.currentPageIndex;
+            var progress = PrepareUIUpdate(massiveFile.TotalRecordsEstimate);
 
-            var progress = new Progress<MassiveTextFile.SearchResult>((record) =>
-                {
-                    if (!record.IsProgressReport)
-                    {
-                        this.AddLineInGrid(record.Columns, record.LineIndex);
-                    }
-                    this.progressBarSearch.Value = (int)record.LineIndex; //TODO: handle long balues properly
-                    this.labelSearchProgress.Text = record.LineIndex.ToString();
-                });
-
-            await Task.Factory.StartNew(() => SearchAsync(textBoxQuery.Text, progress), TaskCreationOptions.LongRunning);
+            await DisplaySearchResultsAsync(this.massiveFile, textBoxQuery.Text, progress, this.massiveFile.PageSize, cts);
         }
 
-        private async Task SearchAsync(string query, IProgress<MassiveTextFile.SearchResult> progress)
+        private static async Task DisplaySearchResultsAsync(MassiveFile massiveFile, string query, IProgress<Record> progress, long maxResults, CancellationTokenSource cts)
         {
-            var filteredLinesBuffer = new BufferBlock<MassiveTextFile.SearchResult>();
-            var task = massiveTextFile.SearchRecordsAsync(filteredLinesBuffer, new ColumnRecordSearch(query), cts.Token);
+            var recordsBuffer = new BufferBlock<Record>();
+            var searchTask = massiveFile.SearchRecordsAsync(recordsBuffer, new ColumnRecordSearch(query), maxResults, cts.Token);
 
-            var recordCount = 0;
-            while (await filteredLinesBuffer.OutputAvailableAsync())
+            await DisplayTaskResults(progress, cts.Token, recordsBuffer, searchTask);
+        }
+
+        private static async Task DisplayTaskResults(IProgress<Record> progress, CancellationToken ct, IReceivableSourceBlock<Record> recordsBuffer, Task task)
+        {
+            while (await recordsBuffer.OutputAvailableAsync(ct))
             {
-                MassiveTextFile.SearchResult record;
-                while (filteredLinesBuffer.TryReceive(out record))
+                Record record;
+                while (recordsBuffer.TryReceive(out record))
                 {
                     progress.Report(record);
-
-                    if (!record.IsProgressReport)
-                    {
-                        recordCount++;
-
-                        if (recordCount >= 50)
-                            cts.Cancel();
-                    }
                 }
             }
+
+            await task;
         }
     }
 }

@@ -1,11 +1,23 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.21126.0
+VisualStudioVersion = 12.0.30501.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MassiveFileViewer", "MassiveFileViewer\MassiveFileViewer.csproj", "{657F57A3-DB51-41AE-B903-40C6456A724B}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CommonUtils", "External\DotNetCommonUtils\CommonUtils\CommonUtils.csproj", "{D60B2856-0341-4481-AFDD-DE70532B6884}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F7D3CC7A-D74A-4934-81DF-3DE84D3D6D4A}"
+	ProjectSection(SolutionItems) = preProject
+		.bowerrc = .bowerrc
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		bower.json = bower.json
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MassiveFileViewerLib", "MassiveFileViewerLib\MassiveFileViewerLib.csproj", "{7832F01D-5448-401A-8932-4F85567C75BB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MassiveFileViewerTests", "MassiveFileViewerTests\MassiveFileViewerTests.csproj", "{E8BD4B5A-302E-44F7-A38A-C24CD8C63108}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MassiveFileViewer", "MassiveFileViewer\MassiveFileViewer.csproj", "{657F57A3-DB51-41AE-B903-40C6456A724B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,14 +25,22 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{657F57A3-DB51-41AE-B903-40C6456A724B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{657F57A3-DB51-41AE-B903-40C6456A724B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{657F57A3-DB51-41AE-B903-40C6456A724B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{657F57A3-DB51-41AE-B903-40C6456A724B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D60B2856-0341-4481-AFDD-DE70532B6884}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D60B2856-0341-4481-AFDD-DE70532B6884}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D60B2856-0341-4481-AFDD-DE70532B6884}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D60B2856-0341-4481-AFDD-DE70532B6884}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7832F01D-5448-401A-8932-4F85567C75BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7832F01D-5448-401A-8932-4F85567C75BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7832F01D-5448-401A-8932-4F85567C75BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7832F01D-5448-401A-8932-4F85567C75BB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E8BD4B5A-302E-44F7-A38A-C24CD8C63108}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E8BD4B5A-302E-44F7-A38A-C24CD8C63108}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E8BD4B5A-302E-44F7-A38A-C24CD8C63108}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E8BD4B5A-302E-44F7-A38A-C24CD8C63108}.Release|Any CPU.Build.0 = Release|Any CPU
+		{657F57A3-DB51-41AE-B903-40C6456A724B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{657F57A3-DB51-41AE-B903-40C6456A724B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{657F57A3-DB51-41AE-B903-40C6456A724B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{657F57A3-DB51-41AE-B903-40C6456A724B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

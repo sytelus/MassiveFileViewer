@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace MassiveFileViewer
+namespace MassiveFileViewerLib
 {
     public interface IRecordSearch
     {
-        bool IsPasses(string[] line);
+        bool IsPasses(Record record);
     }
 }

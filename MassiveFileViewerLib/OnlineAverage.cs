@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MassiveFileViewer
+namespace MassiveFileViewerLib
 {
     /// <summary>
     /// From http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Online_algorithm

@@ -53,6 +53,7 @@
             this.toolStripStatusLabelTotalRecords = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelCurrentPosition = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelFileSize = new System.Windows.Forms.ToolStripStatusLabel();
+            this.labelEta = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
             this.panel4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).BeginInit();
@@ -156,6 +157,7 @@
             // 
             // panel2
             // 
+            this.panel2.Controls.Add(this.labelEta);
             this.panel2.Controls.Add(this.labelSearchProgress);
             this.panel2.Controls.Add(this.progressBarSearch);
             this.panel2.Controls.Add(this.buttonSearch);
@@ -294,6 +296,15 @@
             this.toolStripStatusLabelFileSize.Size = new System.Drawing.Size(45, 17);
             this.toolStripStatusLabelFileSize.Text = "FileSize";
             // 
+            // labelEta
+            // 
+            this.labelEta.AutoSize = true;
+            this.labelEta.Location = new System.Drawing.Point(13, 129);
+            this.labelEta.Name = "labelEta";
+            this.labelEta.Size = new System.Drawing.Size(28, 13);
+            this.labelEta.TabIndex = 4;
+            this.labelEta.Text = "ETA";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -349,6 +360,7 @@
         private System.Windows.Forms.TextBox textBoxQuery;
         private System.Windows.Forms.ProgressBar progressBarSearch;
         private System.Windows.Forms.Label labelSearchProgress;
+        private System.Windows.Forms.Label labelEta;
     }
 }
 

@@ -43,7 +43,7 @@ namespace MassiveFileViewerLib
                     else
                     {
                         //Keep sending progress if we don't find too many results
-                        if (recordCount % this.PageSize == 0)
+                        if (recordCount % (this.PageSize * 10) == 0)
                         {
                             var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
                             await searchResultBuffer.SendAsync(searchResult, ct);

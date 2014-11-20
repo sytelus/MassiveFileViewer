@@ -19,7 +19,7 @@ namespace MassiveFileViewerLib
         int bufferEnd;
         int bufferCurrent;
 
-        public BufferedFileAccess(string filePath, int bufferSize = 1 << 20)
+        public BufferedFileAccess(string filePath, int bufferSize = 1 << 26)
         {
             this.bufferSize = bufferSize;
             this.fileStream = File.OpenRead(filePath);

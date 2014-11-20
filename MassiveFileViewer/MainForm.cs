@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -55,20 +56,20 @@ namespace MassiveFileViewer
             this.currentPageIndex = pageIndex;
 
             var approximatePrefix = massiveFile.IsPageApproximate(this.currentPageIndex) ? "~" : string.Empty;
-            toolStripStatusLabelCurrentRecord.Text = "Current Record: " + approximatePrefix  + massiveFile.CurrentRecordEstimate;
+            toolStripStatusLabelCurrentRecord.Text = "Current Record: " + approximatePrefix + massiveFile.CurrentRecordEstimate.ToString("N0");
             toolStripStatusLabelTotalRecords.Text = string.Concat("Total Records: ~", massiveFile.TotalRecordsEstimate.ToString("N0"),
                 "±", ((int)massiveFile.TotalRecordsStandardDeviation).ToString("N0"));
-            toolStripStatusLabelFileSize.Text = @"File Size: " + massiveFile.FileSize;
-            toolStripStatusLabelCurrentPosition.Text = @"Current Byte#: " + massiveFile.CurrentBytePosition;
-            toolStripStatusLabelCurrentPage.Text = @"Current Page:  " + approximatePrefix + this.currentPageIndex;
+            toolStripStatusLabelFileSize.Text = @"File Size: " + massiveFile.FileSize.ToString("N0");
+            toolStripStatusLabelCurrentPosition.Text = @"Current Byte#: " + massiveFile.CurrentBytePosition.ToString("N0");
+            toolStripStatusLabelCurrentPage.Text = @"Current Page:  " + approximatePrefix + this.currentPageIndex.ToString("N0");
             toolStripStatusLabelTotalPages.Text = string.Concat("Total Pages: ~", massiveFile.TotalPagesEstimate.ToString("N0"),
                 "±", ((int)massiveFile.TotalPagesStandardDeviation).ToString("N0"));
             textBoxCurrentPageIndex.Text = this.currentPageIndex.ToString("N0");
-            textBoxPageSize.Text = massiveFile.PageSize.ToStringInvariant();
+            textBoxPageSize.Text = massiveFile.PageSize.ToString("N0");
 
             this.ClearGrid();
 
-            var progress = PrepareUIUpdate(massiveFile.PageSize);
+            var progress = PrepareUiUpdate(massiveFile.PageSize);
 
             await DisplayRecordsAsync(this.massiveFile, this.currentPageIndex, progress, cts.Token);
         }
@@ -123,12 +124,13 @@ namespace MassiveFileViewer
             await this.GoToPageAsync((long)(this.currentPageIndex * changeFactor));
         }
 
-        private Progress<Record> PrepareUIUpdate(long maxrecordsExpected)
+        private Progress<Record> PrepareUiUpdate(long maxRecordsExpected)
         {
-            this.progressBarSearch.Maximum = (int)maxrecordsExpected;   //TODO: handle long balues properly
+            this.progressBarSearch.Maximum = (int)maxRecordsExpected;   //TODO: handle long balues properly
             this.progressBarSearch.Minimum = 0;
             this.ClearGrid();
             long recordCount = 0;
+            var sw = Stopwatch.StartNew();
 
             var progress = new Progress<Record>((record) =>
             {
@@ -138,6 +140,11 @@ namespace MassiveFileViewer
                 }
                 this.progressBarSearch.Value = (int)++recordCount;
                 this.labelSearchProgress.Text = record.RecordIndex.ToString("N0");
+
+                var throughput = sw.Elapsed.TotalMilliseconds/recordCount;  //millisecond/record
+                var eta = throughput*maxRecordsExpected;
+                this.labelEta.Text = @"{0} ms/record, ETA: {1}".FormatEx(throughput.ToString("N0"),
+                    (eta/1000).ToString("N0"));
             });
 
             return progress;
@@ -146,7 +153,7 @@ namespace MassiveFileViewer
         private async void buttonSearch_Click(object sender, EventArgs e)
         {
             this.pageIndexBeforeSearch = this.currentPageIndex;
-            var progress = PrepareUIUpdate(massiveFile.TotalRecordsEstimate);
+            var progress = PrepareUiUpdate(massiveFile.TotalRecordsEstimate);
 
             await DisplaySearchResultsAsync(this.massiveFile, textBoxQuery.Text, progress, this.massiveFile.PageSize, cts);
         }

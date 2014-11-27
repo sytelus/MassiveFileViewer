@@ -56,7 +56,6 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="BufferedFileAccessTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="MassiveFileTests.cs" />
   </ItemGroup>
@@ -72,9 +71,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <None Include="BufferedFileAccessTestData.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Content Include="LineDelimitedSingleColumnData.txt">

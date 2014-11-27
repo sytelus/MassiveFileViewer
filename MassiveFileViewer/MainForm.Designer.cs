@@ -179,7 +179,7 @@
             // 
             // progressBarSearch
             // 
-            this.progressBarSearch.Location = new System.Drawing.Point(16, 99);
+            this.progressBarSearch.Location = new System.Drawing.Point(16, 111);
             this.progressBarSearch.Name = "progressBarSearch";
             this.progressBarSearch.Size = new System.Drawing.Size(167, 15);
             this.progressBarSearch.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
@@ -299,7 +299,7 @@
             // labelEta
             // 
             this.labelEta.AutoSize = true;
-            this.labelEta.Location = new System.Drawing.Point(13, 129);
+            this.labelEta.Location = new System.Drawing.Point(13, 148);
             this.labelEta.Name = "labelEta";
             this.labelEta.Size = new System.Drawing.Size(28, 13);
             this.labelEta.TabIndex = 4;

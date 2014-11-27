@@ -143,7 +143,7 @@ namespace MassiveFileViewer
 
                 var throughput = sw.Elapsed.TotalMilliseconds/recordCount;  //millisecond/record
                 var eta = throughput*maxRecordsExpected;
-                this.labelEta.Text = @"{0} ms/record, ETA: {1}".FormatEx(throughput.ToString("N0"),
+                this.labelEta.Text = @"{0} ms/record, ETA: {1}s".FormatEx(throughput.ToString("N0"),
                     (eta/1000).ToString("N0"));
             });
 

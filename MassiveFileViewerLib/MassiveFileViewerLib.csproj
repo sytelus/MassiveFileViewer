@@ -45,9 +45,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BufferedFileAccess.cs" />
     <Compile Include="ColumnRecordFilter.cs" />
+    <Compile Include="DelimitedFileAccess.cs" />
+    <Compile Include="RawFileAccess.cs" />
     <Compile Include="MassiveFile.Search.cs" />
+    <Compile Include="Page.cs" />
     <Compile Include="ParallelUtils.cs" />
     <Compile Include="IRecordFilter.cs" />
     <Compile Include="MassiveFile.cs" />

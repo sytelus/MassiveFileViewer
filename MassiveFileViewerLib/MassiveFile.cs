@@ -16,12 +16,12 @@ namespace MassiveFileViewerLib
     /// </summary>
     public partial class MassiveFile : IDisposable
     {
-        private BufferedFileAccess fileAccess;
+        private DelimitedFileAccess fileAccess;
         private PagePositions pagePositions;
 
-        public MassiveFile(string filePath, int pageSize = 1000, int fileBufferSize = 1 << 20)
+        public MassiveFile(string filePath, int pageSize = 1000, int? fileBufferSize = null)
         {
-            this.fileAccess = new BufferedFileAccess(filePath, fileBufferSize);
+            this.fileAccess = new DelimitedFileAccess(filePath, bufferSize: fileBufferSize);
             this.pagePositions = new PagePositions(pageSize, this.fileAccess.FileSize);
         }
 
@@ -36,19 +36,18 @@ namespace MassiveFileViewerLib
         /// </summary>
         private async Task SeekToPageAsync(long pageIndex, CancellationToken ct)
         {
-            if ((pageIndex > 0 && this.EndOfFile) || (pageIndex < 0))
+            if (pageIndex < 0)
                 throw new IndexOutOfRangeException("Page index {0} is not valid because it is before or beyond the file".FormatEx(pageIndex));
 
             //Seek to byte position
             var byteIndex = this.pagePositions.GetPageByteStart(pageIndex);
-            await this.fileAccess.SeekAsync(byteIndex, ct);
+            this.fileAccess.Seek(byteIndex);
 
             //Complete current partial record if we are visiting this page for the first time
             if (!this.pagePositions.IsPagePositionCached(pageIndex))
-                await this.ReadRecordsAsync(DataflowBlock.NullTarget<Record>(), ct, 1);
+                await this.fileAccess.ReadRecordsAsync(DataflowBlock.NullTarget<Record>(), ct, 1);
         }
-
-
+        
         public async Task GetRecordsAsync(long pageIndex, ITargetBlock<Record> recordsBuffer, CancellationToken ct)
         {
             await GetRecordsAsync(pageIndex, recordsBuffer, ct, this.PageSize);
@@ -62,63 +61,13 @@ namespace MassiveFileViewerLib
             var pageStartBytePosition = this.CurrentBytePosition;
 
             //Fill up the records until we have page full or run out of file
-            await this.ReadRecordsAsync(recordsBuffer, ct, maxRecords,
+            await this.fileAccess.ReadRecordsAsync(recordsBuffer, ct, maxRecords,
                 this.pagePositions.IsPagePositionCached(pageIndex) ? this.ObserveRecord : (Func<Record, int, bool>) null);
 
             //record the stats for this page
             this.pagePositions.SetPageExtents(pageIndex, pageStartBytePosition, this.CurrentBytePosition - 1);
         }
-
-        private async Task ReadRecordsAsync(ITargetBlock<Record> recordsBuffer, CancellationToken ct, long maxRecords = long.MaxValue
-            , Func<Record, int, bool> onRecordCreated = null)
-        {
-            var recordBytes = new List<byte>();
-            int recordCount = 0, recordByteCount = 0;
-            while (!ct.IsCancellationRequested && maxRecords > recordCount)
-            {
-                var thisByte = this.fileAccess.Current;
-
-                //Move to next position for future reads
-                if (thisByte >= 0)
-                {
-                    await this.fileAccess.NextAsync(ct);
-                    recordByteCount++;
-                }
-
-                if (thisByte == 13)   //Skip CR before LF
-                    continue;
-                //UTF-8 header
-                else if (thisByte == 191 && recordBytes.Count == 2 && recordBytes[0] == 239 && recordBytes[1] == 187)
-                {
-                    recordBytes.RemoveRange(0, 2);
-                    recordByteCount = 0;
-                    continue;
-                }
-
-                var isRecordEnding = thisByte == 10 || thisByte < 0; //UNIX: 10, Windows: 13+10
-                if (!isRecordEnding)
-                    recordBytes.Add((byte) thisByte);
-                else
-                {
-                    var text = Encoding.UTF8.GetString(recordBytes.ToArray());
-                    var record = new Record() {Text = text, RecordIndex = recordCount, IsProgressReport = false};
-                    var isInvalidRecord = false;
-                    if (onRecordCreated != null)
-                        isInvalidRecord = onRecordCreated(record, recordByteCount);
-
-                    if (!isInvalidRecord)
-                    {
-                        recordCount++;
-                        await recordsBuffer.SendAsync(record, ct);
-                    }
-                    recordBytes.Clear();
-                    recordByteCount = 0;
-                }
-            }
-
-            recordsBuffer.Complete();
-        }
-
+        
         private bool ObserveRecord(Record record, int recordByteSize)
         {
             this.pagePositions.ObserveRecord(recordByteSize);
@@ -148,7 +97,7 @@ namespace MassiveFileViewerLib
 
         public bool EndOfFile
         {
-            get { return this.fileAccess.EndOfFile; }
+            get { return this.fileAccess.EOF; }
         }
         public bool StartOfFile
         {

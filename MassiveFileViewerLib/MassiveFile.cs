@@ -45,15 +45,15 @@ namespace MassiveFileViewerLib
 
             //Complete current partial record if we are visiting this page for the first time
             if (!this.pagePositions.IsPagePositionCached(pageIndex))
-                await this.fileAccess.ReadRecordsAsync(DataflowBlock.NullTarget<Record>(), ct, 1);
-        }
-        
-        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<Record> recordsBuffer, CancellationToken ct)
-        {
-            await GetRecordsAsync(pageIndex, recordsBuffer, ct, this.PageSize);
+                await this.fileAccess.ReadRecordsAsync(DataflowBlock.NullTarget<IList<Record>>(), ct, 1, 1);
         }
 
-        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<Record> recordsBuffer, CancellationToken ct, long maxRecords)
+        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct)
+        {
+            await GetRecordsAsync(pageIndex, recordsBuffer, recordBatchSize, ct, this.PageSize);
+        }
+
+        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct, long maxRecords)
         {
             await SeekToPageAsync(pageIndex, ct);
 
@@ -61,7 +61,7 @@ namespace MassiveFileViewerLib
             var pageStartBytePosition = this.CurrentBytePosition;
 
             //Fill up the records until we have page full or run out of file
-            await this.fileAccess.ReadRecordsAsync(recordsBuffer, ct, maxRecords,
+            await this.fileAccess.ReadRecordsAsync(recordsBuffer, ct, recordBatchSize, maxRecords,
                 this.pagePositions.IsPagePositionCached(pageIndex) ? this.ObserveRecord : (Func<Record, int, bool>) null);
 
             //record the stats for this page

@@ -22,7 +22,7 @@ namespace MassiveFileViewerLib
             this.bufferCurrent = 0;
         }
 
-        public async Task ReadRecordsAsync(ITargetBlock<Record> recordsBuffer, CancellationToken ct, long maxRecords = long.MaxValue
+        public async Task ReadRecordsAsync(ITargetBlock<IList<Record>> recordsBuffer, CancellationToken ct, int recordBatchSize, long maxRecords
             , Func<Record, int, bool> onRecordCreated = null)
         {
             //Do not exit from this method prematuarely as last line needs to be executed on exit
@@ -30,6 +30,7 @@ namespace MassiveFileViewerLib
             var recordBytes = new List<byte>();
             long recordCount = 0;
             int recordDelimiterByteIndex = 0;
+            var recordBatch = new List<Record>(recordBatchSize);
 
             while (!ct.IsCancellationRequested && maxRecords > recordCount)
             {
@@ -62,8 +63,19 @@ namespace MassiveFileViewerLib
                         //Detect match with delimiter and trigger completion of record
                         if (recordDelimiterByteIndex >= this.recordDelimiterBytes.Length)
                         {
-                            recordCount = await CreateRecord(recordBytes, recordsBuffer, recordCount, recordBytes.Count - this.recordDelimiterBytes.Length
-                                , ct , onRecordCreated);
+                            var record = CreateRecord(recordBytes, recordCount, recordBytes.Count - this.recordDelimiterBytes.Length, onRecordCreated);
+                            if (record != null)
+                            {
+                                recordCount++;
+                                recordBatch.Add(record);
+
+                                if (recordBatch.Count == recordBatchSize)
+                                {
+                                    await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
+                                    recordBatch.Clear();
+                                }
+                            }
+
                             recordBytes.Clear();
                             recordDelimiterByteIndex = 0;
 
@@ -77,7 +89,12 @@ namespace MassiveFileViewerLib
             }
 
             //Compelete any pending record
-            await CreateRecord(recordBytes, recordsBuffer, recordCount, recordBytes.Count, ct, onRecordCreated);
+            var lastRecord = CreateRecord(recordBytes, recordCount, recordBytes.Count, onRecordCreated);
+            if (lastRecord != null)
+
+                recordBatch.Add(lastRecord);
+            if (recordBatch.Count > 0) 
+                await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
 
             recordsBuffer.Complete();
         }
@@ -113,8 +130,8 @@ namespace MassiveFileViewerLib
             return this.CurrentBytePosition;
         }
 
-        private static async Task<long> CreateRecord(List<byte> recordBytes, ITargetBlock<Record> recordsBuffer, long recordIndex, int recordByteCount
-            , CancellationToken ct, Func<Record, int, bool> onRecordCreated = null)
+        private static Record CreateRecord(List<byte> recordBytes, long recordIndex, int recordByteCount
+            , Func<Record, int, bool> onRecordCreated = null)
         {
             if (recordBytes.Count > 0)
             {
@@ -125,13 +142,10 @@ namespace MassiveFileViewerLib
                     isInvalidRecord = onRecordCreated(record, recordBytes.Count);
 
                 if (!isInvalidRecord)
-                {
-                    recordIndex++;
-                    await recordsBuffer.SendAsync(record, ct);
-                }
+                    return record;
             }
 
-            return recordIndex;
+            return null;
         }
     }
 }

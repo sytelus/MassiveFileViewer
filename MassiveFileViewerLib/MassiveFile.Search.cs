@@ -11,15 +11,15 @@ namespace MassiveFileViewerLib
 {
     public partial class MassiveFile
     {
-        public async Task SearchRecordsAsync(ITargetBlock<Record> searchResultBuffer, IRecordSearch filter, long maxSearchResults, CancellationToken ct)
+        public async Task SearchRecordsAsync(ITargetBlock<IList<Record>> searchResultBuffer, IRecordSearch filter, int recordBatchSize, long maxSearchResults, CancellationToken ct)
         {
-            var allRecordsBuffer = new BufferBlock<Record>();
+            var allRecordsBuffer = new BufferBlock<IList<Record>>();
 
             var producerCancellationSource = new CancellationTokenSource();
             var pcts = CancellationTokenSource.CreateLinkedTokenSource(producerCancellationSource.Token, ct);
 
             //Spawn generation of records in to seperate thread
-            var producerTask = new Task(async () => await AllRecordsProducerAsync(allRecordsBuffer, pcts.Token)//.SetFault(allRecordsBuffer)
+            var producerTask = new Task(async () => await AllRecordsProducerAsync(allRecordsBuffer, recordBatchSize, pcts.Token)//.SetFault(allRecordsBuffer)
                 , TaskCreationOptions.LongRunning);
             producerTask.Start();
 
@@ -27,26 +27,29 @@ namespace MassiveFileViewerLib
             long recordCount = 0, searchResultCount = 0;
             while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && await allRecordsBuffer.OutputAvailableAsync(ct))
             {
-                Record record;
+                IList<Record> records;
 
                 //Keeo trieng to recieve from buffer until buffer gets empty in which
                 //case we will wait for output again in outer loop
-                while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && allRecordsBuffer.TryReceive(out record))
+                while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && allRecordsBuffer.TryReceive(out records))
                 {
-                    recordCount++;
+                    foreach (var record in records)
+                    {
+                        recordCount++;
 
-                    if (filter.IsPasses(record))
-                    {
-                        await searchResultBuffer.SendAsync(record, ct);
-                        searchResultCount++;
-                    }
-                    else
-                    {
-                        //Keep sending progress if we don't find too many results
-                        if (recordCount % (this.PageSize * 10) == 0)
+                        if (filter.IsPasses(record))
                         {
-                            var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
-                            await searchResultBuffer.SendAsync(searchResult, ct);
+                            await searchResultBuffer.SendAsync(new Record[] { record }, ct);
+                            searchResultCount++;
+                        }
+                        else
+                        {
+                            //Keep sending progress if we don't find too many results
+                            if (recordCount % (this.PageSize * 1000) == 0)
+                            {
+                                var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
+                                await searchResultBuffer.SendAsync(new Record[] { searchResult }, ct);
+                            }
                         }
                     }
                 }
@@ -58,12 +61,12 @@ namespace MassiveFileViewerLib
             searchResultBuffer.Complete();
         }
 
-        private async Task AllRecordsProducerAsync(ITargetBlock<Record> allRecordsBuffer, CancellationToken ct)
+        private async Task AllRecordsProducerAsync(ITargetBlock<IList<Record>> allRecordsBuffer, int recordBatchSize, CancellationToken ct)
         {
             var pageIndex = 0;
             while (!ct.IsCancellationRequested)
             {
-                await this.GetRecordsAsync(pageIndex, allRecordsBuffer, ct, long.MaxValue);
+                await this.GetRecordsAsync(pageIndex, allRecordsBuffer, recordBatchSize, ct, long.MaxValue);
                 if (this.EndOfFile)
                     break;
                 else

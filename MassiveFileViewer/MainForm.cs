@@ -76,8 +76,8 @@ namespace MassiveFileViewer
 
         private static async Task DisplayRecordsAsync(MassiveFile massiveFile, long pageIndex, IProgress<Record> progress, CancellationToken ct)
         {
-            var recordsBuffer = new BufferBlock<Record>();
-            var recordsTask = massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct);
+            var recordsBuffer = new BufferBlock<IList<Record>>();
+            var recordsTask = massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 1, ct);
             await DisplayTaskResults(progress, ct, recordsBuffer, recordsTask);
         }
 
@@ -129,8 +129,8 @@ namespace MassiveFileViewer
             this.progressBarSearch.Maximum = (int)maxRecordsExpected;   //TODO: handle long balues properly
             this.progressBarSearch.Minimum = 0;
             this.ClearGrid();
-            long recordCount = 0;
             var sw = Stopwatch.StartNew();
+            long firstRecordIndex = -1;
 
             var progress = new Progress<Record>((record) =>
             {
@@ -138,7 +138,13 @@ namespace MassiveFileViewer
                 {
                     this.AddRecordInGrid(record, record.RecordIndex);
                 }
-                this.progressBarSearch.Value = (int)++recordCount;
+
+                if (firstRecordIndex == -1)
+                    firstRecordIndex = record.RecordIndex;
+
+                var recordCount = record.RecordIndex - firstRecordIndex + 1;
+
+                this.progressBarSearch.Value = (int) recordCount;
                 this.labelSearchProgress.Text = record.RecordIndex.ToString("N0");
 
                 var throughput = sw.Elapsed.TotalMilliseconds/recordCount;  //millisecond/record
@@ -160,20 +166,23 @@ namespace MassiveFileViewer
 
         private static async Task DisplaySearchResultsAsync(MassiveFile massiveFile, string query, IProgress<Record> progress, long maxResults, CancellationTokenSource cts)
         {
-            var recordsBuffer = new BufferBlock<Record>();
-            var searchTask = massiveFile.SearchRecordsAsync(recordsBuffer, new ColumnRecordSearch(query), maxResults, cts.Token);
+            var recordsBuffer = new BufferBlock<IList<Record>>();
+            var searchTask = massiveFile.SearchRecordsAsync(recordsBuffer, new ColumnRecordSearch(query), 10000, maxResults, cts.Token);
 
             await DisplayTaskResults(progress, cts.Token, recordsBuffer, searchTask);
         }
 
-        private static async Task DisplayTaskResults(IProgress<Record> progress, CancellationToken ct, IReceivableSourceBlock<Record> recordsBuffer, Task task)
+        private static async Task DisplayTaskResults(IProgress<Record> progress, CancellationToken ct, IReceivableSourceBlock<IList<Record>> recordsBuffer, Task task)
         {
             while (await recordsBuffer.OutputAvailableAsync(ct))
             {
-                Record record;
-                while (recordsBuffer.TryReceive(out record))
+                IList<Record> records;
+                while (recordsBuffer.TryReceive(out records))
                 {
-                    progress.Report(record);
+                    foreach (var record in records)
+                    {
+                        progress.Report(record);
+                    }
                 }
             }
 

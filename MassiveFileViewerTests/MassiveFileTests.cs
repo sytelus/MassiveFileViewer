@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 using MassiveFileViewerLib;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Collections.Generic;
 
 namespace MassiveFileViewerTests
 {
@@ -23,8 +25,8 @@ namespace MassiveFileViewerTests
             {
                 for (var pageIndex = 0; pageIndex < Math.Ceiling(originalSeq.Length/3.0); pageIndex++)
                 {
-                    var recordsBuffer = new BufferBlock<Record>();
-                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct).Wait(ct);
+                    var recordsBuffer = new BufferBlock<IList<Record>>();
+                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 1000, ct).Wait(ct);
                     var page = BufferToString(recordsBuffer, ct).Result;
 
                     var substringEnd = (originalSeq.Length - (pageIndex*3 + 3)) > 0 ? 3 : originalSeq.Length - pageIndex*3;
@@ -44,8 +46,8 @@ namespace MassiveFileViewerTests
             {
                 for (var pageIndex = 0; pageIndex < Math.Ceiling(originalSeq.Length / 3.0); pageIndex++)
                 {
-                    var recordsBuffer = new BufferBlock<Record>();
-                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct).Wait(ct);
+                    var recordsBuffer = new BufferBlock<IList<Record>>();
+                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 1, ct).Wait(ct);
                     var page = BufferToString(recordsBuffer, ct).Result;
 
                     var substringEnd = (originalSeq.Length - (pageIndex * 3 + 3)) > 0 ? 3 : originalSeq.Length - pageIndex * 3;
@@ -62,10 +64,10 @@ namespace MassiveFileViewerTests
             using (var massiveFile = new MassiveFile("LineDelimitedSingleColumnData.txt", 3, 5))
             {
                 //Page 0 seek mandatory
-                massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<Record>(), ct).Wait(ct);
+                massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<IList<Record>>(), 20, ct).Wait(ct);
 
-                var recordsBuffer = new BufferBlock<Record>();
-                massiveFile.GetRecordsAsync(3, recordsBuffer, ct).Wait(ct);
+                var recordsBuffer = new BufferBlock<IList<Record>>();
+                massiveFile.GetRecordsAsync(3, recordsBuffer, 1, ct).Wait(ct);
                 var page = BufferToString(recordsBuffer, ct).Result;
 
                 Assert.IsTrue(page == "jkl");
@@ -80,10 +82,10 @@ namespace MassiveFileViewerTests
             using (var massiveFile = new MassiveFile("LineDelimitedSingleColumnData.txt", 3, 5))
             {
                 //Page 0 seek mandatory
-                massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<Record>(), ct).Wait(ct);
+                massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<IList<Record>>(), 1, ct).Wait(ct);
 
-                var recordsBuffer = new BufferBlock<Record>();
-                massiveFile.GetRecordsAsync(5, recordsBuffer, ct).Wait(ct);
+                var recordsBuffer = new BufferBlock<IList<Record>>();
+                massiveFile.GetRecordsAsync(5, recordsBuffer, 1, ct).Wait(ct);
                 var page = BufferToString(recordsBuffer, ct).Result;
 
                 Assert.IsTrue(page == "pq");
@@ -101,8 +103,8 @@ namespace MassiveFileViewerTests
             {
                 for (var pageIndex = 0; pageIndex < Math.Ceiling(originalSeq.Length/3.0); pageIndex++)
                 {
-                    var recordsBuffer = new BufferBlock<Record>();
-                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct).Wait(ct);
+                    var recordsBuffer = new BufferBlock<IList<Record>>();
+                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 1000, ct).Wait(ct);
                     var page = BufferToString(recordsBuffer, ct).Result;
 
                     var substringEnd = (originalSeq.Length - (pageIndex*3 + 3)) > 0 ? 3 : originalSeq.Length - pageIndex*3;
@@ -111,8 +113,8 @@ namespace MassiveFileViewerTests
 
                 for (var pageIndex = (int) Math.Floor(originalSeq.Length / 3.0); pageIndex > 0 ; pageIndex--)
                 {
-                    var recordsBuffer = new BufferBlock<Record>();
-                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, ct).Wait(ct);
+                    var recordsBuffer = new BufferBlock<IList<Record>>();
+                    massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 2, ct).Wait(ct);
                     var page = BufferToString(recordsBuffer, ct).Result;
 
                     var substringEnd = (originalSeq.Length - (pageIndex * 3 + 3)) > 0 ? 3 : originalSeq.Length - pageIndex * 3;
@@ -121,15 +123,18 @@ namespace MassiveFileViewerTests
             }
         }
 
-        private static async Task<string> BufferToString(BufferBlock<Record> recordsBuffer, CancellationToken ct)
+        private static async Task<string> BufferToString(BufferBlock<IList<Record>> recordsBuffer, CancellationToken ct)
         {
             var stringBuffer = new StringBuilder();
             while (await recordsBuffer.OutputAvailableAsync(ct))
             {
-                Record record;
-                while (recordsBuffer.TryReceive(out record))
+                IList<Record> records;
+                while (recordsBuffer.TryReceive(out records))
                 {
-                    stringBuffer.Append(record.Text);
+                    foreach (var record in records)
+                    {
+                        stringBuffer.Append(record.Text);
+                    }
                 }
             }
 

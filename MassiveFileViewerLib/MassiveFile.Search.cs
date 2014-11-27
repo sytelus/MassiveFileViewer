@@ -23,15 +23,32 @@ namespace MassiveFileViewerLib
                 , TaskCreationOptions.LongRunning);
             producerTask.Start();
 
+            var consumerTask = new Task(() => AllRecordsConsumerAsync(searchResultBuffer, filter, maxSearchResults, ct, allRecordsBuffer).Wait(ct)
+                , TaskCreationOptions.LongRunning); ;
+            consumerTask.Start();
+
+            await consumerTask;
+
+            if (!producerTask.IsCompleted)
+                producerCancellationSource.Cancel();
+
+            searchResultBuffer.Complete();
+        }
+
+        private async Task AllRecordsConsumerAsync(ITargetBlock<IList<Record>> searchResultBuffer, IRecordSearch filter, long maxSearchResults,
+            CancellationToken ct, BufferBlock<IList<Record>> allRecordsBuffer)
+        {
             //Go through each record and populate output with records that pass filter
             long recordCount = 0, searchResultCount = 0;
-            while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && await allRecordsBuffer.OutputAvailableAsync(ct))
+            while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested &&
+                   await allRecordsBuffer.OutputAvailableAsync(ct))
             {
                 IList<Record> records;
 
                 //Keeo trieng to recieve from buffer until buffer gets empty in which
                 //case we will wait for output again in outer loop
-                while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && allRecordsBuffer.TryReceive(out records))
+                while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested &&
+                       allRecordsBuffer.TryReceive(out records))
                 {
                     foreach (var record in records)
                     {
@@ -39,26 +56,21 @@ namespace MassiveFileViewerLib
 
                         if (filter.IsPasses(record))
                         {
-                            await searchResultBuffer.SendAsync(new Record[] { record }, ct);
+                            await searchResultBuffer.SendAsync(new Record[] {record}, ct);
                             searchResultCount++;
                         }
                         else
                         {
                             //Keep sending progress if we don't find too many results
-                            if (recordCount % (this.PageSize * 1000) == 0)
+                            if (recordCount%(this.PageSize*1000) == 0)
                             {
-                                var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
-                                await searchResultBuffer.SendAsync(new Record[] { searchResult }, ct);
+                                var searchResult = new Record() {IsProgressReport = true, RecordIndex = recordCount};
+                                await searchResultBuffer.SendAsync(new Record[] {searchResult}, ct);
                             }
                         }
                     }
                 }
             }
-
-            if (!producerTask.IsCompleted)
-                producerCancellationSource.Cancel();
-
-            searchResultBuffer.Complete();
         }
 
         private async Task AllRecordsProducerAsync(ITargetBlock<IList<Record>> allRecordsBuffer, int recordBatchSize, CancellationToken ct)

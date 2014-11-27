@@ -17,7 +17,7 @@ namespace MassiveFileViewerLib
         public RawFileAccess(string filePath, int? bufferSize = null)
         {
             this.fileStream = File.OpenRead(filePath);
-            this.buffer = new byte[bufferSize ?? 1 << 24];
+            this.buffer = new byte[bufferSize ?? 1 << 20];
             this.bufferLength = 0;
         }
 

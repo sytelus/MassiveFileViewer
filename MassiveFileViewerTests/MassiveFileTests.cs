@@ -70,7 +70,25 @@ namespace MassiveFileViewerTests
                 massiveFile.GetRecordsAsync(3, recordsBuffer, 1, ct).Wait(ct);
                 var page = BufferToString(recordsBuffer, ct).Result;
 
-                Assert.IsTrue(page == "jkl");
+                Assert.IsTrue(page == "mno");
+            }
+        }
+
+        [TestMethod]
+        [DeploymentItem("LineDelimitedSingleColumnData.txt")]
+        public void SeekPagePastLastSmallBufferTest()
+        {
+            var ct = new CancellationToken();
+            using (var massiveFile = new MassiveFile("LineDelimitedSingleColumnData.txt", 3, 5))
+            {
+                //Page 0 seek mandatory
+                massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<IList<Record>>(), 1, ct).Wait(ct);
+
+                var recordsBuffer = new BufferBlock<IList<Record>>();
+                massiveFile.GetRecordsAsync(5, recordsBuffer, 1, ct).Wait(ct);
+                var page = BufferToString(recordsBuffer, ct).Result;
+
+                Assert.IsTrue(page == "");
             }
         }
 
@@ -85,10 +103,10 @@ namespace MassiveFileViewerTests
                 massiveFile.GetRecordsAsync(0, DataflowBlock.NullTarget<IList<Record>>(), 1, ct).Wait(ct);
 
                 var recordsBuffer = new BufferBlock<IList<Record>>();
-                massiveFile.GetRecordsAsync(5, recordsBuffer, 1, ct).Wait(ct);
+                massiveFile.GetRecordsAsync(4, recordsBuffer, 1, ct).Wait(ct);
                 var page = BufferToString(recordsBuffer, ct).Result;
 
-                Assert.IsTrue(page == "pq");
+                Assert.IsTrue(page == "q");
             }
         }
 

@@ -6,23 +6,25 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
+using CommonUtils;
 
 namespace MassiveFileViewerLib
 {
     public class DelimitedFileAccess : RawFileAccess
     {
-        private readonly byte[] recordDelimiterBytes;
-        private readonly string recordDelimiter;
+        private readonly byte[] delimBytes;
+        private readonly string delimString;
         private int bufferCurrent;
-        private string[] recordDelimiterAsArray;
+        private string[] delimStringArray;
+        private static readonly byte[] EmptyBytes = new byte[] {};
 
         //TODO: Auto-detect delimiters, file encoding
         public DelimitedFileAccess(string filePath, string recordDelimiter = "\r\n", int? bufferSize = null)
             : base(filePath, bufferSize)
         {
-            this.recordDelimiterBytes = Encoding.UTF8.GetBytes(recordDelimiter);
-            this.recordDelimiter = recordDelimiter;
-            this.recordDelimiterAsArray = new string[] {this.recordDelimiter};
+            this.delimBytes = Encoding.UTF8.GetBytes(recordDelimiter);
+            this.delimString = recordDelimiter;
+            this.delimStringArray = new string[] {this.delimString};
             this.bufferCurrent = 0;
         }
 
@@ -31,10 +33,10 @@ namespace MassiveFileViewerLib
         {
             //Do not exit from this method prematuarely as last line needs to be executed on exit
 
-            var recordBytes = new List<byte>();
+            var pendingBytes = new List<byte>();
             long recordCount = 0;
             var recordBatch = new List<Record>(recordBatchSize);
-            var recordDelimiterIndex = 0;
+            var delimStart = 0;
 
             while (!ct.IsCancellationRequested && maxRecords > recordCount)
             {
@@ -45,78 +47,53 @@ namespace MassiveFileViewerLib
                     this.bufferCurrent = 0;
 
                     if (this.BufferLength == 0)
-                        break;
+                        break;  //EOF
                 }
 
-                while (this.bufferCurrent < this.BufferLength)    //until we are at the end of the buffer
+                //until we are at the end of the buffer
+                while (this.bufferCurrent < this.BufferLength)    
                 {
-                    int foundIndex;
-                    if (recordDelimiterIndex == 0)
-                        foundIndex = Array.IndexOf(this.Buffer, this.recordDelimiterBytes[0], this.bufferCurrent);
-                    else
-                        foundIndex = this.Buffer[this.bufferCurrent] == this.recordDelimiterBytes[recordDelimiterIndex] ? this.bufferCurrent : -1;
-
-                    if (foundIndex < 0)
+                    var foundIndex = FindDelimiter(this.Buffer, this.BufferLength, this.bufferCurrent, this.delimBytes, ref delimStart);
+                    if (foundIndex >= 0)
                     {
-                        recordDelimiterIndex = 0;
+                        var record = CreateRecord(this.Buffer, pendingBytes, this.bufferCurrent, foundIndex, recordCount, delimBytes, onRecordCreated);
+                        this.bufferCurrent = foundIndex + 1;    //Start next search afer found location
 
-                        //If first delimiter byte not found then add whole buffer to pending bytes
-                        this.CopyFromBuffer(recordBytes, recordDelimiterIndex == 0 ? this.BufferLength : this.bufferCurrent + 1);
-                    }
-                    else
-                    {
-                        //Look for next delimiter bytes
-                        int i = foundIndex + 1;
-                        recordDelimiterIndex++;
-                        while (i < this.BufferLength && recordDelimiterIndex < this.recordDelimiterBytes.Length)
+                        //Batch the record
+                        if (record != null)
                         {
-                            if (this.recordDelimiterBytes[recordDelimiterIndex++] != this.Buffer[i++])
-                            {
-                                recordDelimiterIndex = 0;
+                            recordCount++;
+                            recordBatch.Add(record);
+                            if (maxRecords <= recordCount || ct.IsCancellationRequested)
                                 break;
-                            }
-                        }
 
-                        //If we found all delimiter bytes
-                        if (recordDelimiterIndex == this.recordDelimiterBytes.Length)
-                        {
-                            recordDelimiterIndex = 0;
-
-                            this.CopyFromBuffer(recordBytes, i);
-
-                            var record = CreateRecord(recordBytes, recordCount, recordBytes.Count - this.recordDelimiterBytes.Length, onRecordCreated);
-                            recordBytes.Clear();
-
-                            if (record != null)
+                            //Flush this batch of record
+                            if (recordBatch.Count >= recordBatchSize)
                             {
-                                recordCount++;
-                                recordBatch.Add(record);
-                                if (maxRecords <= recordCount || ct.IsCancellationRequested)
-                                    break;
-
-                                //Flush this batch of record
-                                if (recordBatch.Count >= recordBatchSize)
-                                {
-                                    await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
-                                    recordBatch.Clear();
-                                }
+                                await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
+                                recordBatch.Clear();
                             }
                         }
-                        else if (i == this.BufferLength) //Buffer ended but match was found
-                            this.CopyFromBuffer(recordBytes, i);
-                        else //match was not found
-                            this.CopyFromBuffer(recordBytes, this.bufferCurrent + 1);
+                    }
+                    else //we did not found delimiter
+                    {
+                        //Save pending bytes
+                        for(var i=this.bufferCurrent; i < this.BufferLength; i++)
+                            pendingBytes.Add(this.Buffer[i]);
+
+                        this.bufferCurrent = this.BufferLength;
                     }
                 }
             }
 
             //Compelete any pending record
-            if (this.EOF)
+            if (this.EOF && !(maxRecords <= recordCount || ct.IsCancellationRequested))
             {
-                var lastRecord = CreateRecord(recordBytes, recordCount, recordBytes.Count, onRecordCreated);
+                var lastRecord = CreateRecord(this.Buffer, pendingBytes, this.bufferCurrent, this.BufferLength - 1, recordCount, EmptyBytes, onRecordCreated);
                 if (lastRecord != null)
                     recordBatch.Add(lastRecord);
             }
+            //else cancellation requested or we reached max records
 
             //Flush record batch
             if (recordBatch.Count > 0) 
@@ -124,23 +101,61 @@ namespace MassiveFileViewerLib
 
             recordsBuffer.Complete();
         }
-        
-        private void CopyFromBuffer(IList<byte> recordBytes, int uptoIndex)
+
+        private static int FindDelimiter(byte[] buffer, int bufferLength, int bufferCurrent, byte[] delimBytes, ref int delimStart)
         {
-            var bufferStart = this.bufferCurrent; //Add bytes for decoding from this index
+            //Reason this code is not so simple is because we may start anywhere in buffer and we have multiple delimiter bytes to match
 
-            //Skip UTF-8 header
-            if (bufferStart == 0 && this.BufferLength > 2 && this.Buffer[0] == 239 && this.Buffer[1] == 187 &&
-                this.Buffer[2] == 191)
-                bufferStart = 3;
+            while (bufferCurrent < bufferLength)    //We may break out if we find delimiter match or determine there is none
+            {
+                int bufferIndex, delimIndex;    //two indices to compare arrays
 
-            //Ad bytes for string conversion
-            for (var i = bufferStart; i < uptoIndex; i++)
-                recordBytes.Add(this.Buffer[i]);
+                //If we are looking from start of delimiter
+                if (delimStart == 0)
+                {
+                    //Search for the first byte
+                    var foundIndex = Array.IndexOf(buffer, delimBytes[0], bufferCurrent);
 
-            this.bufferCurrent = uptoIndex;
+                    //if first byte not found then we don't need to compare rest of delim array
+                    if (foundIndex < 0)
+                        break;
+                    else //Compare rest of the delim array from next position
+                    {
+                        bufferIndex = foundIndex + 1;
+                        delimIndex = delimStart + 1;
+                    }
+                }
+                else //We have already compared previous bytes in delimiter so now compare next bytes
+                {
+                    bufferIndex = bufferCurrent;
+                    delimIndex = delimStart;
+                }
+                
+                //Match rest of the delimiter array
+                for (; bufferIndex < bufferLength && delimIndex < delimBytes.Length && delimBytes[delimIndex] == buffer[bufferIndex]; bufferIndex++, delimIndex++)
+                { }
+
+                //Case 1: All delim bytes found
+                if (delimIndex == delimBytes.Length)
+                {
+                    delimStart = 0; //Next search for delim starts from byte 0
+                    return bufferIndex - 1; //Return position of last delimiter byte found
+                }
+                //Case 2A: Delim bytes not found, buffer ened
+                else if (bufferIndex >= bufferLength)
+                {
+                    delimStart = delimIndex; //After reloading buffer we will start from where we left off
+                    return -1;
+                }
+                //else Case 2B: Delim bytes not found, buffer not ended
+                bufferCurrent++;   //TODO: we should be starting search back at bufferCurrent - delimiterStart + 1
+                delimStart = 0;
+            }
+
+            //If we are here then we have run out of buffer
+            return -1;
         }
-
+        
         public long CurrentBytePosition
         {
             get { return this.FileStreamPosition - (this.BufferLength - this.bufferCurrent); }
@@ -172,21 +187,36 @@ namespace MassiveFileViewerLib
             return this.CurrentBytePosition;
         }
 
-        private static Record CreateRecord(List<byte> recordBytes, long recordIndex, int recordByteCount
-            , Func<Record, int, bool> onRecordCreated = null)
+        private static Record CreateRecord(byte[] buffer, IList<byte> pendingBytes, int start, int end, long recordIndex, byte[] delimBytes, Func<Record, int, bool> onRecordCreated = null)
         {
-            if (recordBytes.Count > 0)
-            {
-                var text = Encoding.UTF8.GetString(recordBytes.ToArray(), 0, recordByteCount);
-                var record = new Record() {Text = text, RecordIndex = recordIndex, IsProgressReport = false};
-                var isInvalidRecord = false;
-                if (onRecordCreated != null)
-                    isInvalidRecord = onRecordCreated(record, recordBytes.Count);
+            var byteCount = end - start + 1 + pendingBytes.Count - delimBytes.Length;
+            if (byteCount < 0)
+                return null;
 
-                if (!isInvalidRecord)
-                    return record;
+            string text;
+            if (pendingBytes.Count == 0)
+                text = Encoding.UTF8.GetString(buffer, start, byteCount);
+            else
+            {
+                for(var i=start; i <= end; i++)
+                    pendingBytes.Add(buffer[i]);
+
+                text = Encoding.UTF8.GetString(pendingBytes.ToArray(), 0, byteCount);
+                pendingBytes.Clear();
             }
 
+            //Remove BOM if exists
+            if (text.Length > 0 && text[0] == 65279) //Unicode 65279 == Byte order mark or BOM
+                text = text.Substring(1);
+
+            var record = new Record() {Text = text, RecordIndex = recordIndex, IsProgressReport = false};
+            var isInvalidRecord = false;
+            if (onRecordCreated != null)
+                isInvalidRecord = onRecordCreated(record, byteCount + delimBytes.Length);
+
+            if (!isInvalidRecord)
+                return record;
+            
             return null;
         }
     }

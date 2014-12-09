@@ -40,37 +40,47 @@ namespace MassiveFileViewerLib
             searchResultBuffer.CompleteAdding();
         }
 
+        long searchResultCount = 0;
         private void AllRecordsConsumer(BlockingCollection<IList<Record>> searchResultBuffer, IRecordSearch filter, long maxSearchResults,
             CancellationToken ct, BlockingCollection<IList<Record>> allRecordsBuffer)
         {
             //Go through each record and populate output with records that pass filter
-            long recordCount = 0, searchResultCount = 0;
+            long recordCount = 0;
+
+            var filterTasks = new List<Task>();
 
             //Keeo trieng to recieve from buffer until buffer gets empty in which
             //case we will wait for output again in outer loop
-            while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && !allRecordsBuffer.IsCompleted)
+            while (Interlocked.Read(ref this.searchResultCount) < maxSearchResults && !ct.IsCancellationRequested && !allRecordsBuffer.IsCompleted)
             {
                 var records = allRecordsBuffer.Take(ct);
 
-                foreach (var record in records)
-                {
-                    recordCount++;
+                var filterTask = new Task(() => FilterRecords(searchResultBuffer, filter, ct, records), ct, TaskCreationOptions.None);
+                filterTask.Start();
 
-                    if (filter.IsPasses(record))
-                    {
-                        searchResultBuffer.Add(new Record[] {record}, ct);
-                        searchResultCount++;
-                    }
-                    else
-                    {
-                        //Keep sending progress if we don't find too many results
-                        if (recordCount%(this.PageSize*1000) == 0)
-                        {
-                            var searchResult = new Record() {IsProgressReport = true, RecordIndex = recordCount};
-                            searchResultBuffer.Add(new Record[] {searchResult}, ct);
-                        }
-                    }
+                filterTasks.Add(filterTask);
+
+                recordCount += records.Count;
+
+                //Keep sending progress if we don't find too many results
+                if (recordCount % (this.PageSize * 1000) == 0)
+                {
+                    var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
+                    searchResultBuffer.Add(new Record[] { searchResult }, ct);
                 }
+            }
+
+            Task.WaitAll(filterTasks.ToArray(), ct);
+        }
+
+        private void FilterRecords(BlockingCollection<IList<Record>> searchResultBuffer, IRecordSearch filter, CancellationToken ct,
+            IEnumerable<Record> records)
+        {
+            foreach (var record in records.Where(r => filter.IsPasses(r)))
+            {
+                searchResultBuffer.Add(new Record[] {record}, ct);
+                Interlocked.Increment(ref this.searchResultCount);
+                //TODO: stop search if max records is already more
             }
         }
 

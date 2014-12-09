@@ -21,7 +21,5 @@ namespace MassiveFileViewerLib
             var columns = record.Text.Split(Utils.TabDelimiter);
             return columns.Any(c => c.IndexOf(this.query, StringComparison.CurrentCultureIgnoreCase) > -1);
         }
-
-        
     }
 }

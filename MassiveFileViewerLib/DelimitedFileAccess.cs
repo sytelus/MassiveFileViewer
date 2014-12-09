@@ -1,11 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Configuration;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using CommonUtils;
 
 namespace MassiveFileViewerLib
@@ -15,7 +15,6 @@ namespace MassiveFileViewerLib
         private readonly byte[] delimBytes;
         private readonly string delimString;
         private int bufferCurrent;
-        private string[] delimStringArray;
         private static readonly byte[] EmptyBytes = new byte[] {};
 
         //TODO: Auto-detect delimiters, file encoding
@@ -24,11 +23,10 @@ namespace MassiveFileViewerLib
         {
             this.delimBytes = Encoding.UTF8.GetBytes(recordDelimiter);
             this.delimString = recordDelimiter;
-            this.delimStringArray = new string[] {this.delimString};
             this.bufferCurrent = 0;
         }
 
-        public async Task ReadRecordsAsync(ITargetBlock<IList<Record>> recordsBuffer, CancellationToken ct, int recordBatchSize, long maxRecords
+        public void ReadRecords(BlockingCollection<IList<Record>> recordsBuffer, CancellationToken ct, int recordBatchSize, long maxRecords
             , Func<Record, int, bool> onRecordCreated = null)
         {
             //Do not exit from this method prematuarely as last line needs to be executed on exit
@@ -43,7 +41,7 @@ namespace MassiveFileViewerLib
                 //if we are past the buffer end, read more bytes
                 if (this.bufferCurrent >= this.BufferLength)
                 {
-                    await this.ReadAsync(); //read the buffer
+                    this.Read(); //read the buffer
                     this.bufferCurrent = 0;
 
                     if (this.BufferLength == 0)
@@ -70,7 +68,9 @@ namespace MassiveFileViewerLib
                             //Flush this batch of record
                             if (recordBatch.Count >= recordBatchSize)
                             {
-                                await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
+                                if (recordsBuffer != null)
+                                    recordsBuffer.Add(recordBatch.ToArray(), ct);
+
                                 recordBatch.Clear();
                             }
                         }
@@ -96,10 +96,12 @@ namespace MassiveFileViewerLib
             //else cancellation requested or we reached max records
 
             //Flush record batch
-            if (recordBatch.Count > 0) 
-                await recordsBuffer.SendAsync(recordBatch.ToArray(), ct);
+            if (recordBatch.Count > 0)
+                if (recordsBuffer != null)
+                    recordsBuffer.Add(recordBatch.ToArray(), ct);
 
-            recordsBuffer.Complete();
+            if (recordsBuffer != null)
+                recordsBuffer.CompleteAdding();
         }
 
         private static int FindDelimiter(byte[] buffer, int bufferLength, int bufferCurrent, byte[] delimBytes, ref int delimStart)

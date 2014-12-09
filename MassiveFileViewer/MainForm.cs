@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -11,7 +12,6 @@ using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using CommonUtils;
 using CommonWinFormUtils;
-using System.Threading.Tasks.Dataflow;
 using System.Threading;
 using MassiveFileViewerLib;
 
@@ -76,9 +76,10 @@ namespace MassiveFileViewer
 
         private static async Task DisplayRecordsAsync(MassiveFile massiveFile, long pageIndex, IProgress<Record> progress, CancellationToken ct)
         {
-            var recordsBuffer = new BufferBlock<IList<Record>>();
-            var recordsTask = massiveFile.GetRecordsAsync(pageIndex, recordsBuffer, 1, ct);
-            await DisplayTaskResults(progress, ct, recordsBuffer, recordsTask);
+            var recordsBuffer = new BlockingCollection<IList<Record>>();
+            var  recordsTask = new Task(() => massiveFile.GetRecords(pageIndex, recordsBuffer, 1, ct), ct, TaskCreationOptions.LongRunning);
+            recordsTask.Start();
+            await DisplayTaskResultsAsync(progress, ct, recordsBuffer);
         }
 
         private void ClearGrid()
@@ -166,25 +167,29 @@ namespace MassiveFileViewer
 
         private static async Task DisplaySearchResultsAsync(MassiveFile massiveFile, string query, IProgress<Record> progress, long maxResults, CancellationTokenSource cts)
         {
-            var recordsBuffer = new BufferBlock<IList<Record>>();
-            var searchTask = massiveFile.SearchRecordsAsync(recordsBuffer, new ColumnRecordSearch(query), 10000, maxResults, cts.Token);
+            var recordsBuffer = new BlockingCollection<IList<Record>>();
+            var searchTask = new Task(() => massiveFile.SearchRecords(recordsBuffer, new ColumnRecordSearch(query), 10000, maxResults, cts.Token), 
+                cts.Token, TaskCreationOptions.LongRunning);
+            searchTask.Start();
 
-            await DisplayTaskResults(progress, cts.Token, recordsBuffer, searchTask);
+            await DisplayTaskResultsAsync(progress, cts.Token, recordsBuffer);
         }
 
-        private static async Task DisplayTaskResults(IProgress<Record> progress, CancellationToken ct, IReceivableSourceBlock<IList<Record>> recordsBuffer, Task task)
+        private static async Task DisplayTaskResultsAsync(IProgress<Record> progress, CancellationToken ct, BlockingCollection<IList<Record>> recordsBuffer)
         {
-            while (await recordsBuffer.OutputAvailableAsync(ct))
+            var task = new Task(() =>
             {
-                IList<Record> records;
-                while (recordsBuffer.TryReceive(out records))
+                while (!recordsBuffer.IsCompleted)
                 {
+                    IList<Record> records = recordsBuffer.Take(ct);
                     foreach (var record in records)
                     {
                         progress.Report(record);
                     }
                 }
-            }
+            }, ct, TaskCreationOptions.LongRunning);
+
+            task.Start();
 
             await task;
         }

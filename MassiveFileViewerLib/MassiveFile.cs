@@ -1,10 +1,10 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using CommonUtils;
 using System.Threading;
 using System.Diagnostics;
@@ -34,7 +34,7 @@ namespace MassiveFileViewerLib
         /// Go to specified page. If page start was not known then go to approximate position and look for next record start.
         /// This method should only be called as part of GetRecordsAsync().
         /// </summary>
-        private async Task SeekToPageAsync(long pageIndex, CancellationToken ct)
+        private void SeekToPage(long pageIndex, CancellationToken ct)
         {
             if (pageIndex < 0)
                 throw new IndexOutOfRangeException("Page index {0} is not valid because it is before or beyond the file".FormatEx(pageIndex));
@@ -45,23 +45,23 @@ namespace MassiveFileViewerLib
 
             //Complete current partial record if we are visiting this page for the first time
             if (!this.pagePositions.IsPagePositionCached(pageIndex))
-                await this.fileAccess.ReadRecordsAsync(DataflowBlock.NullTarget<IList<Record>>(), ct, 1, 1);
+                this.fileAccess.ReadRecords(null, ct, 1, 1);
         }
 
-        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct)
+        public void GetRecords(long pageIndex, BlockingCollection<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct)
         {
-            await GetRecordsAsync(pageIndex, recordsBuffer, recordBatchSize, ct, this.PageSize);
+            GetRecords(pageIndex, recordsBuffer, recordBatchSize, ct, this.PageSize);
         }
 
-        public async Task GetRecordsAsync(long pageIndex, ITargetBlock<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct, long maxRecords)
+        public void GetRecords(long pageIndex, BlockingCollection<IList<Record>> recordsBuffer, int recordBatchSize, CancellationToken ct, long maxRecords)
         {
-            await SeekToPageAsync(pageIndex, ct);
+            SeekToPage(pageIndex, ct);
 
             //If we haven't seen this page before than we would include in the stats
             var pageStartBytePosition = this.CurrentBytePosition;
 
             //Fill up the records until we have page full or run out of file
-            await this.fileAccess.ReadRecordsAsync(recordsBuffer, ct, recordBatchSize, maxRecords,
+            this.fileAccess.ReadRecords(recordsBuffer, ct, recordBatchSize, maxRecords,
                 this.pagePositions.IsPagePositionCached(pageIndex) ? this.ObserveRecord : (Func<Record, int, bool>) null);
 
             //record the stats for this page

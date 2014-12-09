@@ -1,91 +1,92 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 
 namespace MassiveFileViewerLib
 {
     public partial class MassiveFile
     {
-        public async Task SearchRecordsAsync(ITargetBlock<IList<Record>> searchResultBuffer, IRecordSearch filter, int recordBatchSize, long maxSearchResults, CancellationToken ct)
+        public void SearchRecords(BlockingCollection<IList<Record>> searchResultBuffer, IRecordSearch filter, int recordBatchSize, long maxSearchResults, CancellationToken ct)
         {
-            var allRecordsBuffer = new BufferBlock<IList<Record>>();
+            var allRecordsBuffer = new BlockingCollection<IList<Record>>();
 
+            //Create new cancellation token that we can use to cancel producer tasks if we got enough results
             var producerCancellationSource = new CancellationTokenSource();
             var pcts = CancellationTokenSource.CreateLinkedTokenSource(producerCancellationSource.Token, ct);
 
             //Spawn generation of records in to seperate thread
-            var producerTask = new Task(async () => await AllRecordsProducerAsync(allRecordsBuffer, recordBatchSize, pcts.Token)//.SetFault(allRecordsBuffer)
+            var producerTask = new Task(() => AllRecordsProducer(allRecordsBuffer, recordBatchSize, pcts.Token)
                 , TaskCreationOptions.LongRunning);
             producerTask.Start();
 
-            var consumerTask = new Task(() => AllRecordsConsumerAsync(searchResultBuffer, filter, maxSearchResults, ct, allRecordsBuffer).Wait(ct)
+            //Start consumer task to go through producer records
+            var consumerTask = new Task(() => AllRecordsConsumer(searchResultBuffer, filter, maxSearchResults, ct, allRecordsBuffer)
                 , TaskCreationOptions.LongRunning); ;
             consumerTask.Start();
 
-            await consumerTask;
+            //Wait till we have found enough results or search is cancelled or no more records
+            consumerTask.Wait(ct);
 
+            //Cancel producer task if needed
             if (!producerTask.IsCompleted)
                 producerCancellationSource.Cancel();
 
-            searchResultBuffer.Complete();
+            //Signal others that we are done with seatch
+            searchResultBuffer.CompleteAdding();
         }
 
-        private async Task AllRecordsConsumerAsync(ITargetBlock<IList<Record>> searchResultBuffer, IRecordSearch filter, long maxSearchResults,
-            CancellationToken ct, BufferBlock<IList<Record>> allRecordsBuffer)
+        private void AllRecordsConsumer(BlockingCollection<IList<Record>> searchResultBuffer, IRecordSearch filter, long maxSearchResults,
+            CancellationToken ct, BlockingCollection<IList<Record>> allRecordsBuffer)
         {
             //Go through each record and populate output with records that pass filter
             long recordCount = 0, searchResultCount = 0;
-            while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested &&
-                   await allRecordsBuffer.OutputAvailableAsync(ct))
+
+            //Keeo trieng to recieve from buffer until buffer gets empty in which
+            //case we will wait for output again in outer loop
+            while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested && !allRecordsBuffer.IsCompleted)
             {
-                IList<Record> records;
+                var records = allRecordsBuffer.Take(ct);
 
-                //Keeo trieng to recieve from buffer until buffer gets empty in which
-                //case we will wait for output again in outer loop
-                while (searchResultCount < maxSearchResults && !ct.IsCancellationRequested &&
-                       allRecordsBuffer.TryReceive(out records))
+                foreach (var record in records)
                 {
-                    foreach (var record in records)
-                    {
-                        recordCount++;
+                    recordCount++;
 
-                        if (filter.IsPasses(record))
+                    if (filter.IsPasses(record))
+                    {
+                        searchResultBuffer.Add(new Record[] {record}, ct);
+                        searchResultCount++;
+                    }
+                    else
+                    {
+                        //Keep sending progress if we don't find too many results
+                        if (recordCount%(this.PageSize*1000) == 0)
                         {
-                            await searchResultBuffer.SendAsync(new Record[] {record}, ct);
-                            searchResultCount++;
-                        }
-                        else
-                        {
-                            //Keep sending progress if we don't find too many results
-                            if (recordCount%(this.PageSize*1000) == 0)
-                            {
-                                var searchResult = new Record() {IsProgressReport = true, RecordIndex = recordCount};
-                                await searchResultBuffer.SendAsync(new Record[] {searchResult}, ct);
-                            }
+                            var searchResult = new Record() {IsProgressReport = true, RecordIndex = recordCount};
+                            searchResultBuffer.Add(new Record[] {searchResult}, ct);
                         }
                     }
                 }
             }
         }
 
-        private async Task AllRecordsProducerAsync(ITargetBlock<IList<Record>> allRecordsBuffer, int recordBatchSize, CancellationToken ct)
+        private void AllRecordsProducer(BlockingCollection<IList<Record>> allRecordsBuffer, int recordBatchSize, CancellationToken ct)
         {
             var pageIndex = 0;
             while (!ct.IsCancellationRequested)
             {
-                await this.GetRecordsAsync(pageIndex, allRecordsBuffer, recordBatchSize, ct, long.MaxValue);
+                this.GetRecords(pageIndex, allRecordsBuffer, recordBatchSize, ct, long.MaxValue);
                 if (this.EndOfFile)
                     break;
                 else
                     pageIndex++;
             }
 
-            allRecordsBuffer.Complete();
+            allRecordsBuffer.CompleteAdding();
         }
 
     }

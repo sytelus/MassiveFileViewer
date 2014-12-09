@@ -26,6 +26,11 @@ namespace MassiveFileViewerLib
             this.bufferLength = await fileStream.ReadAsync(this.buffer, 0, this.buffer.Length);
         }
 
+        protected void Read()
+        {
+            this.bufferLength = fileStream.Read(this.buffer, 0, this.buffer.Length);
+        }
+
         protected byte[] Buffer
         {
             get { return this.buffer; }

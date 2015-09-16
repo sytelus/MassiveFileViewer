@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -193,5 +194,78 @@ namespace MassiveFileViewer
 
             await task;
         }
+
+        private void buttonSpeedTest_Click(object sender, EventArgs e)
+        {
+            double byteSumTime;
+            var byteSum = GetByteSum(out byteSumTime);
+
+            MessageBox.Show("Time to sum bytes: {0}s, Sum: {1}".FormatEx(byteSumTime, byteSum));
+
+            double recordCountTime;
+            var recordsCount = GetRecordsCount(out recordCountTime);
+            MessageBox.Show("Time to count records: {0}s, Record Count: {1}".FormatEx(recordCountTime, recordsCount));
+        }
+
+        private long GetByteSum(out double byteSumTime)
+        {
+            var buffer = new byte[1 << 20];
+            var sw = Stopwatch.StartNew();
+            long byteSum = 0;
+            using (var fs = File.OpenRead(this.textBoxFilePath.Text))
+            {
+                do
+                {
+                    var len = fs.Read(buffer, 0, buffer.Length);
+                    for (var i = 0; i < len; i++)
+                        byteSum += buffer[i];
+                } while (fs.Position < fs.Length);
+            }
+            byteSumTime = sw.Elapsed.TotalSeconds;
+            return byteSum;
+        }
+
+        private int GetRecordsCount(out double recordCountTime)
+        {
+            Stopwatch sw;
+            var massive = new MassiveFile(this.textBoxFilePath.Text);
+            var pageIndex = 0;
+            var recordsCount = 0;
+            sw = Stopwatch.StartNew();
+            while (!massive.EndOfFile)
+            {
+                var allRecordsBuffer = new BlockingCollection<IList<Record>>();
+                massive.GetRecords(pageIndex++, allRecordsBuffer, massive.PageSize, cts.Token, massive.PageSize);
+                IList<Record> records;
+                while (!allRecordsBuffer.IsCompleted && allRecordsBuffer.TryTake(out records))
+                {
+                    recordsCount += records.Count;
+                }
+            }
+            recordCountTime = sw.Elapsed.TotalSeconds;
+            return recordsCount;
+        }
+
+        private int GetSearchResultCount(out double searchResultCountTime)
+        {
+            Stopwatch sw;
+            var massive = new MassiveFile(this.textBoxFilePath.Text);
+            var pageIndex = 0;
+            var recordsCount = 0;
+            sw = Stopwatch.StartNew();
+            while (!massive.EndOfFile)
+            {
+                var allRecordsBuffer = new BlockingCollection<IList<Record>>();
+                massive.GetRecords(pageIndex++, allRecordsBuffer, massive.PageSize, cts.Token, massive.PageSize);
+                IList<Record> records;
+                while (!allRecordsBuffer.IsCompleted && allRecordsBuffer.TryTake(out records))
+                {
+                    recordsCount += records.Count;
+                }
+            }
+            searchResultCountTime = sw.Elapsed.TotalSeconds;
+            return recordsCount;
+        }
+
     }
 }

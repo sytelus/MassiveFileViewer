@@ -29,6 +29,7 @@
         private void InitializeComponent()
         {
             this.panel1 = new System.Windows.Forms.Panel();
+            this.dataGridViewMain = new System.Windows.Forms.DataGridView();
             this.panel4 = new System.Windows.Forms.Panel();
             this.buttonChangePageSize = new System.Windows.Forms.Button();
             this.textBoxPageSize = new System.Windows.Forms.TextBox();
@@ -36,8 +37,8 @@
             this.textBoxCurrentPageIndex = new System.Windows.Forms.TextBox();
             this.buttonNext = new System.Windows.Forms.Button();
             this.buttonPrevious = new System.Windows.Forms.Button();
-            this.dataGridViewMain = new System.Windows.Forms.DataGridView();
             this.panel2 = new System.Windows.Forms.Panel();
+            this.labelEta = new System.Windows.Forms.Label();
             this.labelSearchProgress = new System.Windows.Forms.Label();
             this.progressBarSearch = new System.Windows.Forms.ProgressBar();
             this.buttonSearch = new System.Windows.Forms.Button();
@@ -53,10 +54,10 @@
             this.toolStripStatusLabelTotalRecords = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelCurrentPosition = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabelFileSize = new System.Windows.Forms.ToolStripStatusLabel();
-            this.labelEta = new System.Windows.Forms.Label();
+            this.buttonSpeedTest = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
-            this.panel4.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).BeginInit();
+            this.panel4.SuspendLayout();
             this.panel2.SuspendLayout();
             this.panel3.SuspendLayout();
             this.statusStrip1.SuspendLayout();
@@ -71,6 +72,21 @@
             this.panel1.Name = "panel1";
             this.panel1.Size = new System.Drawing.Size(830, 628);
             this.panel1.TabIndex = 0;
+            // 
+            // dataGridViewMain
+            // 
+            this.dataGridViewMain.AllowUserToAddRows = false;
+            this.dataGridViewMain.AllowUserToDeleteRows = false;
+            this.dataGridViewMain.AllowUserToOrderColumns = true;
+            this.dataGridViewMain.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.DisplayedCells;
+            this.dataGridViewMain.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.dataGridViewMain.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.dataGridViewMain.EditMode = System.Windows.Forms.DataGridViewEditMode.EditProgrammatically;
+            this.dataGridViewMain.Location = new System.Drawing.Point(0, 0);
+            this.dataGridViewMain.Name = "dataGridViewMain";
+            this.dataGridViewMain.ReadOnly = true;
+            this.dataGridViewMain.Size = new System.Drawing.Size(830, 575);
+            this.dataGridViewMain.TabIndex = 0;
             // 
             // panel4
             // 
@@ -140,23 +156,9 @@
             this.buttonPrevious.UseVisualStyleBackColor = true;
             this.buttonPrevious.Click += new System.EventHandler(this.buttonPrevious_Click);
             // 
-            // dataGridViewMain
-            // 
-            this.dataGridViewMain.AllowUserToAddRows = false;
-            this.dataGridViewMain.AllowUserToDeleteRows = false;
-            this.dataGridViewMain.AllowUserToOrderColumns = true;
-            this.dataGridViewMain.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.DisplayedCells;
-            this.dataGridViewMain.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridViewMain.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.dataGridViewMain.EditMode = System.Windows.Forms.DataGridViewEditMode.EditProgrammatically;
-            this.dataGridViewMain.Location = new System.Drawing.Point(0, 0);
-            this.dataGridViewMain.Name = "dataGridViewMain";
-            this.dataGridViewMain.ReadOnly = true;
-            this.dataGridViewMain.Size = new System.Drawing.Size(830, 575);
-            this.dataGridViewMain.TabIndex = 0;
-            // 
             // panel2
             // 
+            this.panel2.Controls.Add(this.buttonSpeedTest);
             this.panel2.Controls.Add(this.labelEta);
             this.panel2.Controls.Add(this.labelSearchProgress);
             this.panel2.Controls.Add(this.progressBarSearch);
@@ -167,6 +169,15 @@
             this.panel2.Name = "panel2";
             this.panel2.Size = new System.Drawing.Size(200, 687);
             this.panel2.TabIndex = 1;
+            // 
+            // labelEta
+            // 
+            this.labelEta.AutoSize = true;
+            this.labelEta.Location = new System.Drawing.Point(13, 148);
+            this.labelEta.Name = "labelEta";
+            this.labelEta.Size = new System.Drawing.Size(28, 13);
+            this.labelEta.TabIndex = 4;
+            this.labelEta.Text = "ETA";
             // 
             // labelSearchProgress
             // 
@@ -296,14 +307,15 @@
             this.toolStripStatusLabelFileSize.Size = new System.Drawing.Size(45, 17);
             this.toolStripStatusLabelFileSize.Text = "FileSize";
             // 
-            // labelEta
+            // buttonSpeedTest
             // 
-            this.labelEta.AutoSize = true;
-            this.labelEta.Location = new System.Drawing.Point(13, 148);
-            this.labelEta.Name = "labelEta";
-            this.labelEta.Size = new System.Drawing.Size(28, 13);
-            this.labelEta.TabIndex = 4;
-            this.labelEta.Text = "ETA";
+            this.buttonSpeedTest.Location = new System.Drawing.Point(96, 650);
+            this.buttonSpeedTest.Name = "buttonSpeedTest";
+            this.buttonSpeedTest.Size = new System.Drawing.Size(92, 25);
+            this.buttonSpeedTest.TabIndex = 5;
+            this.buttonSpeedTest.Text = "Speed Test";
+            this.buttonSpeedTest.UseVisualStyleBackColor = true;
+            this.buttonSpeedTest.Click += new System.EventHandler(this.buttonSpeedTest_Click);
             // 
             // MainForm
             // 
@@ -319,9 +331,9 @@
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.MainForm_FormClosed);
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.panel1.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).EndInit();
             this.panel4.ResumeLayout(false);
             this.panel4.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.dataGridViewMain)).EndInit();
             this.panel2.ResumeLayout(false);
             this.panel2.PerformLayout();
             this.panel3.ResumeLayout(false);
@@ -361,6 +373,7 @@
         private System.Windows.Forms.ProgressBar progressBarSearch;
         private System.Windows.Forms.Label labelSearchProgress;
         private System.Windows.Forms.Label labelEta;
+        private System.Windows.Forms.Button buttonSpeedTest;
     }
 }
 

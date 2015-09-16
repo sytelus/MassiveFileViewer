@@ -47,40 +47,51 @@ namespace MassiveFileViewerLib
             //Go through each record and populate output with records that pass filter
             long recordCount = 0;
 
-            var filterTasks = new List<Task>();
-
-            //Keeo trieng to recieve from buffer until buffer gets empty in which
-            //case we will wait for output again in outer loop
-            while (Interlocked.Read(ref this.searchResultCount) < maxSearchResults && !ct.IsCancellationRequested && !allRecordsBuffer.IsCompleted)
+            using (var tasksWaiter = new CountdownEvent(1))
             {
-                var records = allRecordsBuffer.Take(ct);
-
-                var filterTask = new Task(() => FilterRecords(searchResultBuffer, filter, ct, records), ct, TaskCreationOptions.None);
-                filterTask.Start();
-
-                filterTasks.Add(filterTask);
-
-                recordCount += records.Count;
-
-                //Keep sending progress if we don't find too many results
-                if (recordCount % (this.PageSize * 1000) == 0)
+                //Keeo trieng to recieve from buffer until buffer gets empty in which
+                //case we will wait for output again in outer loop
+                while (Interlocked.Read(ref this.searchResultCount) < maxSearchResults && !ct.IsCancellationRequested &&
+                       !allRecordsBuffer.IsCompleted)
                 {
-                    var searchResult = new Record() { IsProgressReport = true, RecordIndex = recordCount };
-                    searchResultBuffer.Add(new Record[] { searchResult }, ct);
-                }
-            }
+                    var records = allRecordsBuffer.Take(ct);
 
-            Task.WaitAll(filterTasks.ToArray(), ct);
+                    tasksWaiter.AddCount();
+                    var filterTask = new Task(
+                        () => FilterRecords(searchResultBuffer, filter, ct, records, tasksWaiter), ct,
+                        TaskCreationOptions.None);
+                    filterTask.Start();
+
+                    recordCount += records.Count;
+
+                    //Keep sending progress if we don't find too many results
+                    if (recordCount%(this.PageSize*1000) == 0)
+                    {
+                        var searchResult = new Record() {IsProgressReport = true, RecordIndex = recordCount};
+                        searchResultBuffer.Add(new Record[] {searchResult}, ct);
+                    }
+                }
+
+                tasksWaiter.Signal();
+                tasksWaiter.Wait(ct);
+            }
         }
 
         private void FilterRecords(BlockingCollection<IList<Record>> searchResultBuffer, IRecordSearch filter, CancellationToken ct,
-            IEnumerable<Record> records)
+            IEnumerable<Record> records, CountdownEvent tasksWaiter)
         {
-            foreach (var record in records.Where(r => filter.IsPasses(r)))
+            try
             {
-                searchResultBuffer.Add(new Record[] {record}, ct);
-                Interlocked.Increment(ref this.searchResultCount);
-                //TODO: stop search if max records is already more
+                foreach (var record in records.Where(r => filter.IsPasses(r)))
+                {
+                    searchResultBuffer.Add(new Record[] {record}, ct);
+                    Interlocked.Increment(ref this.searchResultCount);
+                    //TODO: stop search if max records is already more
+                }
+            }
+            finally
+            {
+                tasksWaiter.Signal();
             }
         }
 

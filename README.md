@@ -1,5 +1,5 @@
-# MassiveFileViewer
-This tool will allow you to browse very large files. It simply does this by loading only few portion of the file at a time. It allows you to browse using previous/next or jump to arbitrary pages. It also allows you to search in large files.
+# Massive File Viewer
+This tool will allow you to browse very large files. It simply does this by loading small portions of the file at a time. It allows you to browse using previous/next or jump to arbitrary pages. It also allows you to search in large files.
 
 ##Goals
 - Always be responsive
